@@ -11,7 +11,7 @@ export default function Notes() {
       <h1>Notes</h1>
 
       {notes.map((n) => (
-        <Link key={n.slug} to={`/${n.slug}`}>
+        <Link key={n.slug} to={`/notes/${n.slug}`}>
           <div className="note-card">
             <h3>{n.title}</h3>
             <p>

@@ -50,12 +50,22 @@ export default function App() {
           }
         />
 
-        {/* Notes */}
+        {/* Notes list */}
         <Route
           path="/notes"
           element={
             <AppLayout>
               <Notes />
+            </AppLayout>
+          }
+        />
+
+        {/* Note detail (wildcard) */}
+        <Route
+          path="/notes/*"
+          element={
+            <AppLayout>
+              <WriteupDetail />
             </AppLayout>
           }
         />

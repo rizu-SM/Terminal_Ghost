@@ -26,8 +26,18 @@ export function loadAllContent(): ContentItem[] {
   Object.entries(modules).forEach(([path, rawContent]) => {
     const file = rawContent as string;
 
-    // Parse frontmatter
-    const { data, content } = matter(file);
+    // Parse frontmatter — gracefully handle files without valid frontmatter
+    let data: Record<string, unknown> = {};
+    let content: string = file;
+    try {
+      const parsed = matter(file);
+      data = parsed.data;
+      content = parsed.content;
+    } catch {
+      // If gray-matter fails, treat the entire file as content (no frontmatter)
+      data = {};
+      content = file;
+    }
 
     // Clean path → slug
     const cleanedPath = path
@@ -50,7 +60,8 @@ export function loadAllContent(): ContentItem[] {
     const category = parts[1];
     const subcategory = parts.length > 3 ? parts[2] : undefined;
 
-    const slug = cleanedPath; // full path slug (clean & simple)
+    // Slug without the type prefix (writeups/ or notes/)
+    const slug = parts.slice(1).join("/");
 
     items.push({
       slug,

@@ -104,18 +104,18 @@ export default function Home() {
 
   /* Terminal lines */
   const terminalLines = [
-    "$ ssh ghost@terminal-ghost.dev",
+    "$ ssh Sami@terminal-Sami.dev",
     "Connecting to secure server...",
     "Authentication successful.",
     "$ cat /etc/motd",
-    `Welcome to Terminal Ghost v2.0`,
+    `Welcome to Terminal Samo v2.0`,
     `Writeups loaded: ${writeups.length}`,
     `Notes indexed: ${notes.length}`,
     "$ echo 'Ready to hack.'",
     "Ready to hack.",
   ];
 
-  const { displayed, showCursor, isDone } = useTypingEffect(terminalLines, 35, 600);
+  const { displayed, showCursor, isDone } = useTypingEffect(terminalLines, 35, 530);
 
   return (
     <div className="home-page">

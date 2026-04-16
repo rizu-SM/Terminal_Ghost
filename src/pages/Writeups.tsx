@@ -14,7 +14,7 @@ export default function Writeups() {
         {writeups.map((w) => (
           <Link
             key={w.slug}
-            to={`/${w.slug}`}
+            to={`/writeups/${w.slug}`}
             className="card"
           >
             <h3>{w.title}</h3>

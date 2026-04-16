@@ -26,7 +26,7 @@ export default function Sidebar() {
                 <ul>
                   {(notes as any).map((note: any) => (
                     <li key={note.slug}>
-                      <Link to={`/${note.slug}`}>
+                      <Link to={`/${note.type}s/${note.slug}`}>
                         {note.title}
                       </Link>
                     </li>
