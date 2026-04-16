@@ -10,15 +10,12 @@ import Sidebar from "./components/layout/Sidebar";
 
 import "./styles/global.css";
 
-function Layout({ children }: { children: React.ReactNode }) {
+/* Layout with sidebar — used for inner pages */
+function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="app">
-      <Navbar />
-
-      <div className="main">
-        <Sidebar />
-        <div className="content">{children}</div>
-      </div>
+    <div className="app-layout">
+      <Sidebar />
+      <main className="app-content">{children}</main>
     </div>
   );
 }
@@ -26,34 +23,30 @@ function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      {/* Navbar is always visible */}
+      <Navbar />
+
       <Routes>
-        {/* Home */}
-        <Route
-          path="/"
-          element={
-            <Layout>
-              <Home />
-            </Layout>
-          }
-        />
+        {/* Home — full-width, no sidebar */}
+        <Route path="/" element={<Home />} />
 
         {/* Writeups list */}
         <Route
           path="/writeups"
           element={
-            <Layout>
+            <AppLayout>
               <Writeups />
-            </Layout>
+            </AppLayout>
           }
         />
 
-        {/* Writeup detail (IMPORTANT: wildcard) */}
+        {/* Writeup detail (wildcard) */}
         <Route
           path="/writeups/*"
           element={
-            <Layout>
+            <AppLayout>
               <WriteupDetail />
-            </Layout>
+            </AppLayout>
           }
         />
 
@@ -61,9 +54,9 @@ export default function App() {
         <Route
           path="/notes"
           element={
-            <Layout>
+            <AppLayout>
               <Notes />
-            </Layout>
+            </AppLayout>
           }
         />
       </Routes>
