@@ -1,0 +1,60 @@
+src/
+│
+├── components/
+│   ├── layout/
+│   │   ├── Navbar.tsx
+│   │   ├── Sidebar.tsx
+│   │   ├── Layout.tsx
+│   │
+│   ├── ui/
+│   │   ├── Tag.tsx
+│   │   ├── SearchBar.tsx
+│   │
+│   ├── markdown/
+│       ├── MarkdownRenderer.tsx
+│
+├── pages/
+│   ├── Home.tsx
+│   ├── Writeups.tsx
+│   ├── WriteupDetail.tsx
+│   ├── Notes.tsx
+│
+content/
+    │
+    ├── writeups/
+    │   ├── web/
+    │   │   ├── picoctf-sqli.md
+    │   │   ├── hackthebox-xss.md
+    │   │
+    │   ├── crypto/
+    │   │   ├── rsa-attack.md
+    │   │
+    │   ├── reverse/
+    │       ├── crackme1.md
+    │
+    ├── notes/
+        ├── web/
+        │   ├── sqlinjection/
+        │   │   ├── basic.md
+        │   │   ├── advanced.md
+        │   │   ├── payloads.md
+        │   │
+        │   ├── xss/
+        │       ├── basics.md
+        │       ├── payloads.md
+        │
+        ├── crypto/
+            ├── hash/
+                ├── basics.md
+├── types/
+│   ├── writeup.ts
+│
+├── utils/
+│   ├── markdown.ts
+│   ├── loader.ts
+│
+├── styles/
+│   ├── global.css
+│
+├── App.tsx
+├── main.tsx
