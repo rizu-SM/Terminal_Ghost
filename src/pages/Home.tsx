@@ -41,37 +41,46 @@ function useTypingEffect(lines: string[], speed = 40, lineDelay = 800) {
   return { displayed, showCursor, isDone: currentLine >= lines.length };
 }
 
-/* ── Animated counter ── */
+/* ── Animated counter — fires immediately if already in viewport ── */
 function AnimatedCounter({ target, duration = 1500, label }: { target: number; duration?: number; label: string }) {
   const [count, setCount] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const started = useRef(false);
 
   useEffect(() => {
+    const startAnimation = () => {
+      if (started.current) return;
+      started.current = true;
+      setHasStarted(true);
+      const start = Date.now();
+      const tick = () => {
+        const elapsed = Date.now() - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setCount(Math.floor(eased * target));
+        if (progress < 1) requestAnimationFrame(tick);
+        else setCount(target);
+      };
+      requestAnimationFrame(tick);
+    };
+
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !started.current) {
-          started.current = true;
-          const start = Date.now();
-          const tick = () => {
-            const elapsed = Date.now() - start;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setCount(Math.floor(eased * target));
-            if (progress < 1) requestAnimationFrame(tick);
-          };
-          requestAnimationFrame(tick);
-        }
-      },
-      { threshold: 0.5 }
+      ([entry]) => { if (entry.isIntersecting) startAnimation(); },
+      { threshold: 0 }  // fire as soon as any pixel is visible
     );
-    if (ref.current) observer.observe(ref.current);
+    if (ref.current) {
+      observer.observe(ref.current);
+      // Also check immediately — handles already-visible elements on load
+      const rect = ref.current.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom >= 0) startAnimation();
+    }
     return () => observer.disconnect();
   }, [target, duration]);
 
   return (
     <div className="stat-card" ref={ref}>
-      <span className="stat-number">{count}+</span>
+      <span className="stat-number">{hasStarted ? `${count}+` : "—"}</span>
       <span className="stat-label">{label}</span>
     </div>
   );
@@ -131,9 +140,9 @@ export default function Home() {
             </div>
 
             <h1 className="hero-title">
-              <span className="title-line">Decode.</span>
-              <span className="title-line">Exploit.</span>
-              <span className="title-line title-accent">Document.</span>
+              <span className="title-line title-line-lg">Decode.</span>
+              <span className="title-line title-line-md">Exploit.</span>
+              <span className="title-line title-line-sm title-accent">Document.</span>
             </h1>
 
             <p className="hero-desc">
@@ -321,7 +330,8 @@ export default function Home() {
           <div className="footer-links">
             <Link to="/writeups">Writeups</Link>
             <Link to="/notes">Notes</Link>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://github.com/rizu-SM/" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://portfolio-final-mu-ten.vercel.app/" target="_blank" rel="noopener noreferrer">Portfolio</a>
           </div>
         </div>
         <div className="footer-bottom">

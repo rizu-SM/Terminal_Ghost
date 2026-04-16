@@ -1,16 +1,16 @@
 import { useParams } from "react-router-dom";
 import { loadAllContent } from "../utils/loader";
 import MarkdownRenderer from "../components/markdown/MarkdownRenderer";
+import NotFound from "../components/ui/NotFound";
 
 export default function WriteupDetail() {
   const { "*": slug } = useParams();
 
   const all = loadAllContent();
-
   const item = all.find((w) => w.slug === slug);
 
   if (!item) {
-    return <div>Writeup not found</div>;
+    return <NotFound />;
   }
 
   return (
@@ -18,7 +18,15 @@ export default function WriteupDetail() {
       <h1>{item.title}</h1>
 
       <div className="meta">
-        <span>{item.date}</span>
+        {item.date && <span>{item.date}</span>}
+        <span className="meta-sep">·</span>
+        <span className="meta-category">{item.category}</span>
+        {item.subcategory && (
+          <>
+            <span className="meta-sep">/</span>
+            <span className="meta-category">{item.subcategory}</span>
+          </>
+        )}
         <div className="tags">
           {item.tags.map((t) => (
             <span key={t} className="tag">
