@@ -2,6 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { useState, useRef } from "react";
+import { slugify } from "../../utils/headingExtractor";
 
 type Props = { content: string };
 
@@ -60,9 +61,40 @@ export default function MarkdownRenderer({ content }: Props) {
             {children}
           </CodeBlockWrapper>
         ),
+        /* Add IDs to headings for anchor links */
+        h2: ({ children, ...rest }) => {
+          const text = extractTextContent(children);
+          const id = slugify(text);
+          return (
+            <h2 id={id} {...rest}>
+              {children}
+            </h2>
+          );
+        },
+        h3: ({ children, ...rest }) => {
+          const text = extractTextContent(children);
+          const id = slugify(text);
+          return (
+            <h3 id={id} {...rest}>
+              {children}
+            </h3>
+          );
+        },
       }}
     >
       {content}
     </ReactMarkdown>
   );
+}
+
+/* ── Utility: extract text from React children ── */
+function extractTextContent(children: any): string {
+  if (typeof children === "string") return children;
+  if (Array.isArray(children)) {
+    return children.map((c) => extractTextContent(c)).join("");
+  }
+  if (children?.props?.children) {
+    return extractTextContent(children.props.children);
+  }
+  return "";
 }
