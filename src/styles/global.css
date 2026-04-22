@@ -257,8 +257,10 @@
 
 /* ── SIDEBAR ── */
 .sidebar {
+  position: sticky;
+  top: 60px;
   width: 260px;
-  min-height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-primary);
   padding: var(--space-lg);
@@ -279,6 +281,31 @@
   margin-bottom: var(--space-lg);
 }
 
+.category-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.category-toggle:hover h4 {
+  color: var(--neon-green);
+}
+
+.category-indicator {
+  display: inline-block;
+  min-width: 12px;
+  text-align: center;
+  color: var(--neon-green);
+  font-size: 0.85rem;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
 .sidebar .category h4 {
   font-family: var(--font-mono);
   font-size: 0.85rem;
@@ -286,12 +313,12 @@
   margin-bottom: var(--space-sm);
   display: flex;
   align-items: center;
-  gap: 6px;
+  margin: 0;
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
 .sidebar .category h4::before {
-  content: '▸';
-  color: var(--neon-green);
+  display: none;
 }
 
 .sidebar .subcategory p {
