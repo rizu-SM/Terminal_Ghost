@@ -1,10 +1,5 @@
 # Eternal Flame
 
-**Challenge**: Eternal Flame  
-**Category**: Web Exploitation  
-**Difficulty**: Easy  
-**Author**: zeref  
-**Flag**: `ghctf{th3_3t3rn4l_fl4m3_r3v34ls_h1dd3n_w1sd0m}`
 
 ## Summary
 The challenge is a Firebase-backed static site for a digital Islamic library. The page hints at "default paths" and shows scholar/book paths that look like Firestore collection routes. By requesting Firebase Hosting's generated config at `/__/firebase/init.json`, we can recover the Firebase project details, sign in anonymously, and read the hinted Firestore collection. The flag is stored in the `flag` document under the `scholars/ibn-taymiyyah/wasitiyyah` collection.
