@@ -3185,6 +3185,27 @@
   color: var(--neon-cyan) !important;
 }
 
+/* ── Clickable tag ── */
+.tag-link {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.tag-link:hover {
+  background: rgba(0, 212, 255, 0.18);
+  border-color: rgba(0, 212, 255, 0.5);
+  color: var(--neon-cyan);
+  transform: translateY(-1px);
+}
+
+/* Note row tags strip */
+.note-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
 /* Type pill on cards in tag filtered view */
 .card-type-pill {
   font-family: var(--font-mono);

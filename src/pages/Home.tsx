@@ -99,6 +99,7 @@ const categoryIcons: Record<string, string> = {
 
 /* ── MAIN HOME COMPONENT ── */
 export default function Home() {
+  const navigate = useNavigate();
   const all = loadAllContent();
   const writeups = all.filter((i) => i.type === "writeup");
   const notes = all.filter((i) => i.type === "note");
@@ -242,7 +243,16 @@ export default function Home() {
 
                 <div className="card-tags">
                   {w.tags.slice(0, 3).map((t) => (
-                    <span key={t} className="tag">{t}</span>
+                    <span
+                      key={t}
+                      className="tag tag-link"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/tags/${encodeURIComponent(t)}`); }}
+                      role="link"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && navigate(`/tags/${encodeURIComponent(t)}`)}
+                    >
+                      {t}
+                    </span>
                   ))}
                 </div>
 

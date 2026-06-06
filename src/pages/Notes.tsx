@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { loadAllContent } from "../utils/loader";
 
 /* ─────────────────────────────────────────────────────────────
@@ -10,6 +10,7 @@ function slugify(str: string) {
 }
 
 export default function Notes() {
+  const navigate = useNavigate();
   const all = loadAllContent();
   const notes = all.filter((i) => i.type === "note");
 
@@ -120,6 +121,22 @@ export default function Notes() {
                               {n.category}
                               {n.subcategory ? ` / ${n.subcategory}` : ""}
                             </span>
+                            {n.tags.length > 0 && (
+                              <span className="note-row-tags">
+                                {n.tags.slice(0, 4).map((t) => (
+                                  <span
+                                    key={t}
+                                    className="tag tag-link"
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/tags/${encodeURIComponent(t)}`); }}
+                                    role="link"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => e.key === "Enter" && navigate(`/tags/${encodeURIComponent(t)}`)}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
                           </span>
                           <span className="note-row-arrow" aria-hidden="true">
                             →
