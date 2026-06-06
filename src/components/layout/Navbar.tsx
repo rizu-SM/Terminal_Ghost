@@ -9,6 +9,7 @@ export default function Navbar() {
     { to: "/", label: "Home" },
     { to: "/writeups", label: "Writeups" },
     { to: "/notes", label: "Notes" },
+    { to: "/tags", label: "Tags" },
   ];
 
   const openSearch = () =>

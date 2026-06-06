@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import Writeups from "./pages/Writeups";
 import WriteupDetail from "./pages/WriteupDetail";
 import Notes from "./pages/Notes";
+import Tags from "./pages/Tags";
 
 import Navbar from "./components/layout/Navbar";
 import Sidebar from "./components/layout/Sidebar";
@@ -105,6 +106,26 @@ export default function App() {
           element={
             <AppLayout>
               <WriteupDetail />
+            </AppLayout>
+          }
+        />
+
+        {/* Tags index */}
+        <Route
+          path="/tags"
+          element={
+            <AppLayout>
+              <Tags />
+            </AppLayout>
+          }
+        />
+
+        {/* Tags filtered by tag */}
+        <Route
+          path="/tags/:tag"
+          element={
+            <AppLayout>
+              <Tags />
             </AppLayout>
           }
         />

@@ -3014,3 +3014,185 @@
     max-width: 320px;
   }
 }
+
+/* ══════════════════════════════════════
+   READING PROGRESS BAR
+   ══════════════════════════════════════ */
+
+.reading-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan));
+  z-index: 9999;
+  transition: width 0.08s linear;
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.5), 0 0 2px rgba(0, 212, 255, 0.3);
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════
+   DIFFICULTY BADGES
+   ══════════════════════════════════════ */
+
+.difficulty-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.difficulty-easy   { color: #00ff41; background: rgba(0, 255, 65, 0.08);   border-color: rgba(0, 255, 65, 0.3);   }
+.difficulty-medium { color: #febc2e; background: rgba(254, 188, 46, 0.08); border-color: rgba(254, 188, 46, 0.3); }
+.difficulty-hard   { color: #ff6b6b; background: rgba(255, 107, 107, 0.08); border-color: rgba(255, 107, 107, 0.3); }
+.difficulty-insane { color: #c084fc; background: rgba(192, 132, 252, 0.08); border-color: rgba(192, 132, 252, 0.3); }
+
+/* Read time in article meta */
+.meta-readtime {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* CTF event pill in article meta */
+.meta-ctf {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.07);
+  border: 1px solid rgba(192, 132, 252, 0.2);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+}
+
+/* Points pill in article meta */
+.meta-points {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #febc2e;
+  background: rgba(254, 188, 46, 0.07);
+  border: 1px solid rgba(254, 188, 46, 0.2);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+}
+
+/* Card meta row (date + difficulty side by side) */
+.card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ══════════════════════════════════════
+   TAGS PAGE
+   ══════════════════════════════════════ */
+
+.tags-page {
+  max-width: 1100px;
+}
+
+.tag-page-hash {
+  color: var(--neon-cyan);
+  font-family: var(--font-mono);
+  margin-right: 2px;
+}
+
+.tag-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-bottom: var(--space-md);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.tag-back-link:hover {
+  color: var(--neon-green);
+}
+
+.tags-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-xl);
+}
+
+.tag-cloud-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.tag-cloud-item:hover {
+  border-color: rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.tag-cloud-hash {
+  color: var(--neon-cyan);
+  font-weight: 700;
+}
+
+.tag-cloud-name {
+  color: var(--text-primary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.tag-cloud-item:hover .tag-cloud-name {
+  color: var(--neon-cyan);
+}
+
+.tag-cloud-count {
+  background: var(--bg-tertiary);
+  color: var(--text-dim);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  margin-left: 2px;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.tag-cloud-item:hover .tag-cloud-count {
+  background: rgba(0, 212, 255, 0.12);
+  color: var(--neon-cyan);
+}
+
+/* Active tag highlight on filtered view */
+.tag-highlighted {
+  background: rgba(0, 212, 255, 0.15) !important;
+  border-color: rgba(0, 212, 255, 0.5) !important;
+  color: var(--neon-cyan) !important;
+}
+
+/* Type pill on cards in tag filtered view */
+.card-type-pill {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 255, 65, 0.06);
+  color: var(--neon-green);
+  border: 1px solid rgba(0, 255, 65, 0.15);
+  margin-left: auto;
+}

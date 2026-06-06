@@ -10,12 +10,21 @@ export type ContentItem = {
   type: "writeup" | "note";
   category: string;
   subcategory?: string;
+
+  difficulty?: "easy" | "medium" | "hard" | "insane";
+  ctf?: string;
+  year?: string;
+  points?: number;
 };
 
 type Frontmatter = {
   title?: unknown;
   date?: unknown;
   tags?: unknown;
+  difficulty?: unknown;
+  ctf?: unknown;
+  year?: unknown;
+  points?: unknown;
 };
 
 type ParsedMarkdown = {
@@ -25,6 +34,17 @@ type ParsedMarkdown = {
 
 function getStringValue(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function getNumberValue(value: unknown): number | undefined {
+  const n = Number(value);
+  return typeof value === "string" && value !== "" && !isNaN(n) ? n : undefined;
+}
+
+function getDifficulty(value: unknown): "easy" | "medium" | "hard" | "insane" | undefined {
+  const v = typeof value === "string" ? value.toLowerCase() : "";
+  if (v === "easy" || v === "medium" || v === "hard" || v === "insane") return v;
+  return undefined;
 }
 
 function getTagsValue(value: unknown): string[] {
@@ -113,13 +133,12 @@ function parseFrontmatter(file: string): ParsedMarkdown {
 
     const cleanedValue = rawValue.replace(/^['"]|['"]$/g, "");
 
-    if (key === "title") {
-      data.title = cleanedValue;
-    }
-
-    if (key === "date") {
-      data.date = cleanedValue;
-    }
+    if (key === "title") data.title = cleanedValue;
+    if (key === "date") data.date = cleanedValue;
+    if (key === "difficulty") data.difficulty = cleanedValue;
+    if (key === "ctf") data.ctf = cleanedValue;
+    if (key === "year") data.year = cleanedValue;
+    if (key === "points") data.points = cleanedValue;
   }
 
   return { data, content };
@@ -181,6 +200,10 @@ export function loadAllContent(): ContentItem[] {
       type: type === "writeups" ? "writeup" : "note",
       category,
       subcategory,
+      difficulty: getDifficulty(data.difficulty),
+      ctf: getStringValue(data.ctf) || undefined,
+      year: getStringValue(data.year) || undefined,
+      points: getNumberValue(data.points),
     });
   });
 

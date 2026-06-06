@@ -1,5 +1,5 @@
 import { loadAllContent } from "../utils/loader";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 const categoryIcons: Record<string, string> = {
@@ -13,6 +13,7 @@ const categoryIcons: Record<string, string> = {
 };
 
 export default function Writeups() {
+  const navigate = useNavigate();
   const all = loadAllContent();
   const writeups = all.filter((i) => i.type === "writeup");
 
@@ -95,11 +96,25 @@ export default function Writeups() {
 
               <h3 className="card-title">{w.title}</h3>
 
-              {w.date && <span className="card-date">{w.date}</span>}
+              <div className="card-meta-row">
+                {w.date && <span className="card-date">{w.date}</span>}
+                {w.difficulty && (
+                  <span className={`difficulty-badge difficulty-${w.difficulty}`}>
+                    {w.difficulty.charAt(0).toUpperCase() + w.difficulty.slice(1)}
+                  </span>
+                )}
+              </div>
 
               <div className="card-tags">
                 {w.tags.slice(0, 3).map((t) => (
-                  <span key={t} className="tag">
+                  <span
+                    key={t}
+                    className="tag tag-link"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/tags/${encodeURIComponent(t)}`); }}
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && navigate(`/tags/${encodeURIComponent(t)}`)}
+                  >
                     {t}
                   </span>
                 ))}

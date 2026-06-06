@@ -8,4 +8,9 @@ export type ContentItem = {
   type: "writeup" | "note";
   category: string;
   subcategory?: string;
+
+  difficulty?: "easy" | "medium" | "hard" | "insane";
+  ctf?: string;
+  year?: string;
+  points?: number;
 };
