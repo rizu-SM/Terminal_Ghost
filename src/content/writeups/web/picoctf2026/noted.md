@@ -1,7 +1,9 @@
 # picoCTF — Noted (Web Exploitation)
 
 **Category:** Web Exploitation
+
 **Link:**  https://learn.cylabacademy.org/library/282
+
 **difficult:** hard
 
 ---
@@ -170,5 +172,3 @@ Order of operations matters — hence the staggered `setTimeout`s:
 - **`window.open(url, name)` + `window.open("", name)`** is a same-origin trick to keep a reference to a page after navigating away — useful for reading state that would otherwise be lost.
 - **`data:` URLs** are a handy delivery method when the target has no internet access — the payload travels inside the URL itself.
 
----
-*Simplified from a public writeup by Siyam for personal study/reference.*

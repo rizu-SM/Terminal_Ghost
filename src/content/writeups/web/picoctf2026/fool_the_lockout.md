@@ -1,5 +1,8 @@
 # Fool the Lockout
+
 **link:** https://learn.cylabacademy.org/library/743
+
+**difficult:** mid
 
 ## Summary
 The login endpoint applies an IP-based rate limit that only counts POST requests and locks an IP after more than 10 failed attempts within a 30-second window. That means we can safely try 10 credentials, sleep just over 30 seconds to reset the window, and continue. With the provided credential dump, this guarantees eventual success without triggering a lockout.

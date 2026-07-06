@@ -1,5 +1,9 @@
 # Flask Session Leak → 2FA Bypass → Flag
 
+**link:** https://learn.cylabacademy.org/library/765
+
+**difficult:** mid
+
 ## Summary
 The app stores authentication state and the 2FA OTP inside the Flask session cookie. Flask cookies are **signed but not encrypted**, so the OTP can be read by decoding the cookie. This allows bypassing 2FA after logging in as admin.
 
